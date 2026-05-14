@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PortalKids Admin</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f3ed;
+      color: #1f2933;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header {
+      background: #12343b;
+      color: white;
+      padding: 18px 20px;
+    }
+    main {
+      display: grid;
+      gap: 16px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    section {
+      background: white;
+      border: 1px solid #d8d6ce;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    #admin {
+      display: grid;
+      gap: 16px;
+    }
+    [hidden] { display: none !important; }
+    h1, h2 { margin: 0 0 12px; }
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.15rem; }
+    label {
+      display: grid;
+      gap: 5px;
+      font-size: .88rem;
+      font-weight: 650;
+      min-width: 0;
+    }
+    input, select, button {
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
+      border: 1px solid #a9b1b8;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      background: white;
+    }
+    input[type="color"] {
+      padding: 6px;
+    }
+    button {
+      border: 0;
+      background: #1f8a70;
+      color: white;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    button.danger { background: #b42318; }
+    button.secondary {
+      background: #31545d;
+    }
+    button.compact {
+      min-height: 36px;
+      padding: 6px 10px;
+      width: auto;
+    }
+    form {
+      display: grid;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+    #loginForm {
+      grid-template-columns: minmax(180px, 1fr) 160px;
+    }
+    #childForm {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px;
+    }
+    #childForm label:nth-of-type(4) {
+      grid-column: 1 / 2;
+    }
+    #childForm button {
+      grid-column: 2 / 4;
+    }
+    #windowForm {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(136px, 1fr);
+    }
+    #windowForm label:nth-of-type(4) {
+      grid-column: 1 / 2;
+    }
+    #windowForm button {
+      grid-column: 2 / 4;
+    }
+    #taskForm {
+      grid-template-columns:
+        minmax(150px, 1.1fr)
+        minmax(128px, .8fr)
+        minmax(128px, .8fr)
+        84px
+        minmax(170px, 1.1fr)
+        minmax(170px, 1.1fr);
+    }
+    #taskForm label:nth-of-type(7) {
+      grid-column: 1 / 2;
+    }
+    #taskForm label:nth-of-type(8) {
+      grid-column: 2 / 3;
+    }
+    #taskForm button {
+      grid-column: 3 / 4;
+    }
+    #resetTimeForm {
+      grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: .92rem;
+    }
+    th, td {
+      border-bottom: 1px solid #e5e2da;
+      padding: 8px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      white-space: nowrap;
+    }
+    .muted { color: #64717d; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    @media (max-width: 900px) {
+      main {
+        padding: 12px;
+      }
+      #childForm,
+      #windowForm,
+      #taskForm,
+      #resetTimeForm,
+      #loginForm {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      #childForm label,
+      #childForm button,
+      #windowForm label,
+      #windowForm button,
+      #taskForm label,
+      #taskForm button,
+      #resetTimeForm label,
+      #resetTimeForm button {
+        grid-column: auto;
+      }
+    }
+    @media (max-width: 560px) {
+      #childForm,
+      #windowForm,
+      #taskForm,
+      #resetTimeForm,
+      #loginForm {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PortalKids Admin</h1>
+    <div id="meta" class="muted"></div>
+  </header>
+  <main>
+    <section id="login">
+      <h2>Parent PIN</h2>
+      <form id="loginForm">
+        <label>PIN <input name="pin" type="password" inputmode="numeric" autocomplete="current-password" required></label>
+        <button type="submit">Unlock</button>
+      </form>
+      <p id="loginError" class="muted"></p>
+    </section>
+
+    <div id="admin" hidden>
+      <div class="grid">
+        <section>
+          <h2>Children</h2>
+          <form id="childForm">
+            <label>ID <input name="id" required></label>
+            <label>Name <input name="displayName" required></label>
+            <label>Color <input name="color" type="color" value="#1f8a70"></label>
+            <label>Order <input name="sortOrder" type="number" value="0"></label>
+            <button type="submit">Save Child</button>
+          </form>
+          <table id="childrenTable"></table>
+        </section>
+
+        <section>
+          <h2>Routine Windows</h2>
+          <form id="windowForm">
+            <label>ID <input name="id" required></label>
+            <label>Name <input name="name" required></label>
+            <label>Start <input name="startTime" type="time" required></label>
+            <label>Order <input name="sortOrder" type="number" value="0"></label>
+            <button type="submit">Save Window</button>
+          </form>
+          <table id="windowsTable"></table>
+        </section>
+      </div>
+
+      <section>
+        <h2>Tasks</h2>
+        <form id="taskForm">
+          <label>ID <input name="id" placeholder="blank for new"></label>
+          <label>Child <select name="childId"></select></label>
+          <label>Window <select name="windowId"></select></label>
+          <label>Icon <input name="visualCue" maxlength="4" placeholder="😁"></label>
+          <label>Title <input name="title" required></label>
+          <label>Note <input name="note"></label>
+          <label>Order <input name="sortOrder" type="number" value="0"></label>
+          <label>Enabled <select name="enabled"><option value="true">Yes</option><option value="false">No</option></select></label>
+          <button type="submit">Save Task</button>
+        </form>
+        <table id="tasksTable"></table>
+      </section>
+
+      <section>
+        <h2>Settings</h2>
+        <form id="resetTimeForm">
+          <label>Daily reset <input name="dailyResetTime" type="time" required></label>
+          <button type="submit">Save Reset Time</button>
+          <button id="resetDay" class="danger" type="button">Manual Reset Today</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Recent History</h2>
+        <table id="historyTable"></table>
+      </section>
+    </div>
+  </main>
+  <script>
+    let token = localStorage.getItem("portalKidsToken") || "";
+    let state = null;
+
+    const post = async (path, data) => {
+      const response = await fetch(`${path}?token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(data)
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Request failed");
+      return json;
+    };
+
+    const load = async () => {
+      const response = await fetch(`/api/state?token=${encodeURIComponent(token)}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error || "Login required");
+      state = json;
+      document.getElementById("login").hidden = true;
+      document.getElementById("admin").hidden = false;
+      render();
+    };
+
+    const renderTable = (id, rows, columns) => {
+      const table = document.getElementById(id);
+      table.innerHTML = `<thead><tr>${columns.map(c => `<th>${c[0]}</th>`).join("")}</tr></thead>` +
+        `<tbody>${rows.map(row => `<tr>${columns.map(c => `<td>${c[1](row)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+    };
+
+    const optionList = (selectName, rows, labelKey) => {
+      document.querySelectorAll(`select[name="${selectName}"]`).forEach(select => {
+        select.innerHTML = rows.map(row => `<option value="${row.id}">${row[labelKey]}</option>`).join("");
+      });
+    };
+
+    const render = () => {
+      document.getElementById("meta").textContent = `${state.adminUrl} | ${state.routineDate} | active: ${state.activeWindow}`;
+      optionList("childId", state.children, "displayName");
+      optionList("windowId", state.windows, "name");
+      document.querySelector("input[name='dailyResetTime']").value = state.settings.dailyResetTime;
+      renderTable("childrenTable", state.children, [
+        ["Name", r => r.displayName], ["ID", r => r.id], ["Color", r => r.color], ["Order", r => r.sortOrder],
+        ["", r => `<span class="actions"><button data-edit-child="${r.id}" class="secondary compact">Edit</button><button data-delete-child="${r.id}" class="danger compact">Delete</button></span>`]
+      ]);
+      renderTable("windowsTable", state.windows, [
+        ["Name", r => r.name], ["ID", r => r.id], ["Start", r => r.startTime], ["Order", r => r.sortOrder],
+        ["", r => `<span class="actions"><button data-edit-window="${r.id}" class="secondary compact">Edit</button><button data-delete-window="${r.id}" class="danger compact">Delete</button></span>`]
+      ]);
+      renderTable("tasksTable", state.tasks, [
+        ["Icon", r => r.visualCue], ["Title", r => r.title], ["Child", r => r.childId], ["Window", r => r.windowId],
+        ["Enabled", r => r.enabled ? "Yes" : "No"], ["", r => `<span class="actions"><button data-edit-task="${r.id}" class="secondary compact">Edit</button><button data-delete-task="${r.id}" class="danger compact">Delete</button></span>`]
+      ]);
+      renderTable("historyTable", state.history, [
+        ["Date", r => r.localDate], ["Task", r => r.taskId], ["Done", r => r.completed ? "Yes" : "No"],
+        ["Completed", r => r.completedAt], ["Cleared", r => r.clearedAt]
+      ]);
+      document.querySelectorAll("[data-edit-child]").forEach(button => {
+        button.onclick = () => {
+          const child = state.children.find(row => row.id === button.dataset.editChild);
+          fillForm("childForm", child);
+        };
+      });
+      document.querySelectorAll("[data-delete-child]").forEach(button => {
+        button.onclick = async () => {
+          if (state.children.length <= 1 || !confirm("Delete this child and their assigned tasks?")) return;
+          state = await post("/api/children/delete", { id: button.dataset.deleteChild });
+          render();
+        };
+      });
+      document.querySelectorAll("[data-edit-window]").forEach(button => {
+        button.onclick = () => {
+          const routineWindow = state.windows.find(row => row.id === button.dataset.editWindow);
+          fillForm("windowForm", routineWindow);
+        };
+      });
+      document.querySelectorAll("[data-delete-window]").forEach(button => {
+        button.onclick = async () => {
+          if (state.windows.length <= 1 || !confirm("Delete this routine window and its assigned tasks?")) return;
+          state = await post("/api/windows/delete", { id: button.dataset.deleteWindow });
+          render();
+        };
+      });
+      document.querySelectorAll("[data-edit-task]").forEach(button => {
+        button.onclick = () => {
+          const task = state.tasks.find(row => row.id === button.dataset.editTask);
+          fillForm("taskForm", { ...task, enabled: String(task.enabled) });
+        };
+      });
+      document.querySelectorAll("[data-delete-task]").forEach(button => {
+        button.onclick = async () => {
+          if (!confirm("Delete this task?")) return;
+          state = await post("/api/tasks/delete", { id: button.dataset.deleteTask });
+          render();
+        };
+      });
+    };
+
+    const fillForm = (formId, values) => {
+      if (!values) return;
+      const form = document.getElementById(formId);
+      Object.entries(values).forEach(([key, value]) => {
+        const field = form.elements.namedItem(key);
+        if (field) field.value = value ?? "";
+      });
+      form.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+
+    document.getElementById("loginForm").onsubmit = async event => {
+      event.preventDefault();
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(new FormData(event.target))
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        document.getElementById("loginError").textContent = json.error || "Invalid PIN";
+        return;
+      }
+      token = json.token;
+      localStorage.setItem("portalKidsToken", token);
+      await load();
+    };
+
+    document.getElementById("childForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/children", new FormData(event.target)); render(); };
+    document.getElementById("windowForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/windows", new FormData(event.target)); render(); };
+    document.getElementById("taskForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/tasks", new FormData(event.target)); event.target.reset(); render(); };
+    document.getElementById("resetTimeForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/settings/reset-time", new FormData(event.target)); render(); };
+    document.getElementById("resetDay").onclick = async () => { state = await post("/api/reset", {}); render(); };
+    if (token) load().catch(() => {});
+  </script>
+</body>
+</html>

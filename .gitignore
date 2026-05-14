@@ -1,2 +1,10 @@
 *.apk
 *.png
+.DS_Store
+.gradle/
+.toolchains/
+build/
+app/build/
+installer/dist/
+installer/macos/.build/
+local.properties
