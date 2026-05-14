@@ -13,6 +13,7 @@ import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -46,7 +47,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         sortOrder = getInt("sortOrder"),
                     )
                 },
-                tasks = connection.query("SELECT id, childId, windowId, title, visualCue, note, enabled, sortOrder FROM routine_tasks ORDER BY childId, windowId, sortOrder") {
+                tasks = connection.query("SELECT id, childId, windowId, title, visualCue, note, enabled, sortOrder, activeDays FROM routine_tasks ORDER BY childId, windowId, sortOrder") {
                     RoutineTask(
                         id = getString("id"),
                         childId = getString("childId"),
@@ -56,6 +57,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         note = getString("note"),
                         enabled = getInt("enabled") == 1,
                         sortOrder = getInt("sortOrder"),
+                        activeDays = getString("activeDays").toActiveDays(),
                     )
                 },
                 completions = connection.query("SELECT localDate, taskId, completed, completedAt, clearedAt FROM daily_completions ORDER BY localDate DESC, taskId") {
@@ -216,7 +218,8 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                             visualCue TEXT NOT NULL,
                             note TEXT,
                             enabled INTEGER NOT NULL,
-                            sortOrder INTEGER NOT NULL
+                            sortOrder INTEGER NOT NULL,
+                            activeDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'
                         )
                         """.trimIndent(),
                     )
@@ -258,6 +261,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         """.trimIndent(),
                     )
                 }
+                connection.ensureRoutineTaskActiveDaysColumn()
             }
         }
     }
@@ -296,8 +300,8 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
         prepareStatement(
             """
             INSERT OR REPLACE INTO routine_tasks
-            (id, childId, windowId, title, visualCue, note, enabled, sortOrder)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (id, childId, windowId, title, visualCue, note, enabled, sortOrder, activeDays)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { statement ->
             tasks.forEach { task ->
@@ -309,6 +313,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                 statement.setString(6, task.note)
                 statement.setInt(7, if (task.enabled) 1 else 0)
                 statement.setInt(8, task.sortOrder)
+                statement.setString(9, task.activeDays.toStorageValue())
                 statement.addBatch()
             }
             statement.executeBatch()
@@ -389,6 +394,47 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
             statement.executeQuery(sql).use { result ->
                 if (result.next()) result.row() else null
             }
+        }
+    }
+
+    private fun Connection.ensureRoutineTaskActiveDaysColumn() {
+        val hasColumn = createStatement().use { statement ->
+            statement.executeQuery("PRAGMA table_info(routine_tasks)").use { result ->
+                var found = false
+                while (result.next()) {
+                    if (result.getString("name") == "activeDays") {
+                        found = true
+                    }
+                }
+                found
+            }
+        }
+        if (!hasColumn) {
+            createStatement().use { statement ->
+                statement.executeUpdate(
+                    """
+                    ALTER TABLE routine_tasks
+                    ADD COLUMN activeDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'
+                    """.trimIndent(),
+                )
+            }
+        }
+    }
+
+    private fun String.toActiveDays(): Set<DayOfWeek> {
+        val days = split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .mapNotNull { value -> runCatching { DayOfWeek.valueOf(value.uppercase()) }.getOrNull() }
+            .toSet()
+        return days.ifEmpty { DayOfWeek.entries.toSet() }
+    }
+
+    private fun Set<DayOfWeek>.toStorageValue(): String {
+        return if (isEmpty()) {
+            DayOfWeek.entries.joinToString(",") { it.name }
+        } else {
+            sortedBy { it.value }.joinToString(",") { it.name }
         }
     }
 }

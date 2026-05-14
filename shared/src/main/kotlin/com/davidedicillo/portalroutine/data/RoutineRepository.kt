@@ -4,9 +4,11 @@ import com.davidedicillo.portalroutine.core.ActiveWindowOverride
 import com.davidedicillo.portalroutine.core.RoutineEngine
 import com.davidedicillo.portalroutine.core.RoutineTask
 import com.davidedicillo.portalroutine.core.RoutineWindowConfig
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.temporal.TemporalAdjusters
 
 class RoutineRepository(private val store: RoutineStore) {
     suspend fun snapshot(): StoreSnapshot {
@@ -63,24 +65,30 @@ class RoutineRepository(private val store: RoutineStore) {
             .filter { it.localDate == routineDate && it.completed }
             .map { it.taskId }
             .toSet()
+        val weekStart = routineDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val weekEnd = weekStart.plusDays(6)
+        val pointTotals = pointTotalsByChild(snapshot, routineDate, weekStart, weekEnd)
         val childIds = snapshot.children.map { it.id }
         val childStates = snapshot.children.sortedBy { it.sortOrder }.map { child ->
             val visibleTasks = snapshot.tasks
-                .filter { it.enabled && it.childId == child.id && it.windowId == activeWindow.id }
+                .filter { it.enabled && it.childId == child.id && it.windowId == activeWindow.id && it.isActiveOn(routineDate) }
                 .sortedBy { it.sortOrder }
                 .map { task -> BoardTask(task, task.id in completedTaskIds) }
             ChildBoardState(
                 child = child,
                 tasks = visibleTasks,
-                progress = RoutineEngine.childProgress(snapshot.tasks, child.id, activeWindow.id, completedTaskIds),
+                progress = RoutineEngine.childProgress(snapshot.tasks, child.id, activeWindow.id, completedTaskIds, routineDate),
+                points = pointTotals[child.id] ?: PointTotals(),
             )
         }
 
         return BoardState(
             routineDate = routineDate,
             activeWindow = activeWindow,
+            weekStart = weekStart,
+            weekEnd = weekEnd,
             children = childStates,
-            allComplete = RoutineEngine.isRoutineComplete(snapshot.tasks, childIds, activeWindow.id, completedTaskIds),
+            allComplete = RoutineEngine.isRoutineComplete(snapshot.tasks, childIds, activeWindow.id, completedTaskIds, routineDate),
             settings = snapshot.settings,
         )
     }
@@ -265,6 +273,37 @@ class RoutineRepository(private val store: RoutineStore) {
 
     private fun needsVisualCueBackfill(task: RoutineTask): Boolean {
         return task.visualCue.isBlank() || task.visualCue == "🪥"
+    }
+
+    private fun pointTotalsByChild(
+        snapshot: StoreSnapshot,
+        routineDate: LocalDate,
+        weekStart: LocalDate,
+        weekEnd: LocalDate,
+    ): Map<String, PointTotals> {
+        val childIds = snapshot.children.map { it.id }.toSet()
+        val taskChildIds = snapshot.tasks.associate { it.id to it.childId }
+        val daily = mutableMapOf<String, Int>()
+        val weekly = mutableMapOf<String, Int>()
+
+        snapshot.completions
+            .filter { it.completed }
+            .forEach { completion ->
+                val childId = taskChildIds[completion.taskId]?.takeIf { it in childIds } ?: return@forEach
+                if (completion.localDate == routineDate) {
+                    daily[childId] = daily.getOrDefault(childId, 0) + 1
+                }
+                if (!completion.localDate.isBefore(weekStart) && !completion.localDate.isAfter(weekEnd)) {
+                    weekly[childId] = weekly.getOrDefault(childId, 0) + 1
+                }
+            }
+
+        return childIds.associateWith { childId ->
+            PointTotals(
+                daily = daily.getOrDefault(childId, 0),
+                weekly = weekly.getOrDefault(childId, 0),
+            )
+        }
     }
 
     private fun visualCueFor(taskId: String, title: String): String {

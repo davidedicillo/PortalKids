@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PendingCompletionEntity::class,
         SettingsEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class RoutineDatabase : RoomDatabase() {
@@ -34,6 +34,7 @@ abstract class RoutineDatabase : RoomDatabase() {
                 )
                     .addMigrations(MIGRATION_1_2)
                     .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }
@@ -57,6 +58,17 @@ abstract class RoutineDatabase : RoomDatabase() {
                         changedAt TEXT NOT NULL,
                         deviceId TEXT NOT NULL
                     )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    ALTER TABLE routine_tasks
+                    ADD COLUMN activeDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'
                     """.trimIndent(),
                 )
             }

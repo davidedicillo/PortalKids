@@ -1,6 +1,8 @@
 package com.davidedicillo.portalroutine.data
 
 import com.davidedicillo.portalroutine.core.RoutineEngine
+import com.davidedicillo.portalroutine.core.RoutineTask
+import com.davidedicillo.portalroutine.core.RoutineWindowConfig
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,6 +10,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -148,6 +151,117 @@ class RoutineRepositoryTest {
         assertEquals(0, childB.progress.completed)
         assertEquals(3, childB.progress.total)
         assertFalse(board.allComplete)
+    }
+
+    @Test
+    fun boardStateShowsOnlyTasksActiveOnTheRoutineDate() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("after-school", "After School", LocalTime.of(13, 0), 0)),
+                tasks = listOf(
+                    RoutineTask(
+                        id = "monday-only",
+                        childId = "child-a",
+                        windowId = "after-school",
+                        title = "Monday pickup",
+                        enabled = true,
+                        sortOrder = 0,
+                        activeDays = setOf(DayOfWeek.MONDAY),
+                    ),
+                    RoutineTask(
+                        id = "tuesday-only",
+                        childId = "child-a",
+                        windowId = "after-school",
+                        title = "Tuesday club",
+                        enabled = true,
+                        sortOrder = 1,
+                        activeDays = setOf(DayOfWeek.TUESDAY),
+                    ),
+                    RoutineTask(
+                        id = "every-day",
+                        childId = "child-a",
+                        windowId = "after-school",
+                        title = "Snack",
+                        enabled = true,
+                        sortOrder = 2,
+                    ),
+                ),
+            ),
+        )
+        val repository = RoutineRepository(store)
+
+        val board = repository.boardState(LocalDateTime.of(2026, 5, 18, 13, 15))
+
+        val child = board.children.single()
+        assertEquals(listOf("monday-only", "every-day"), child.tasks.map { it.task.id })
+        assertEquals(0, child.progress.completed)
+        assertEquals(2, child.progress.total)
+    }
+
+    @Test
+    fun boardStateIncludesDailyAndMondaySundayWeeklyPointsByChild() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(
+                    ChildConfig("child-a", "Kid A", "#1F8A70", 0),
+                    ChildConfig("child-b", "Kid B", "#D95F59", 1),
+                ),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(
+                    RoutineTask("a-today", "child-a", "morning", "Today", enabled = true, sortOrder = 0),
+                    RoutineTask("a-monday", "child-a", "morning", "Monday", enabled = true, sortOrder = 1),
+                    RoutineTask("a-cleared", "child-a", "morning", "Cleared", enabled = true, sortOrder = 2),
+                    RoutineTask("b-disabled", "child-b", "morning", "Disabled but earned", enabled = false, sortOrder = 0),
+                    RoutineTask("b-next-week", "child-b", "morning", "Next week", enabled = true, sortOrder = 1),
+                ),
+                completions = listOf(
+                    DailyCompletion(LocalDate.of(2026, 5, 13), "a-today", true, LocalDateTime.of(2026, 5, 13, 7, 0), null),
+                    DailyCompletion(LocalDate.of(2026, 5, 11), "a-monday", true, LocalDateTime.of(2026, 5, 11, 7, 0), null),
+                    DailyCompletion(LocalDate.of(2026, 5, 13), "a-cleared", false, LocalDateTime.of(2026, 5, 13, 7, 5), LocalDateTime.of(2026, 5, 13, 7, 10)),
+                    DailyCompletion(LocalDate.of(2026, 5, 17), "b-disabled", true, LocalDateTime.of(2026, 5, 17, 7, 0), null),
+                    DailyCompletion(LocalDate.of(2026, 5, 18), "b-next-week", true, LocalDateTime.of(2026, 5, 18, 7, 0), null),
+                    DailyCompletion(LocalDate.of(2026, 5, 13), "deleted-task", true, LocalDateTime.of(2026, 5, 13, 7, 0), null),
+                ),
+            ),
+        )
+        val repository = RoutineRepository(store)
+
+        val board = repository.boardState(LocalDateTime.of(2026, 5, 13, 8, 0))
+        val childA = board.children.first { it.child.id == "child-a" }
+        val childB = board.children.first { it.child.id == "child-b" }
+
+        assertEquals(LocalDate.of(2026, 5, 11), board.weekStart)
+        assertEquals(LocalDate.of(2026, 5, 17), board.weekEnd)
+        assertEquals(PointTotals(daily = 1, weekly = 2), childA.points)
+        assertEquals(PointTotals(daily = 0, weekly = 1), childB.points)
+    }
+
+    @Test
+    fun weeklyPointsUseTheEffectiveRoutineDateBeforeDailyReset() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(
+                    RoutineTask("sunday", "child-a", "morning", "Sunday", enabled = true, sortOrder = 0),
+                    RoutineTask("monday", "child-a", "morning", "Monday", enabled = true, sortOrder = 1),
+                ),
+                completions = listOf(
+                    DailyCompletion(LocalDate.of(2026, 5, 17), "sunday", true, LocalDateTime.of(2026, 5, 17, 7, 0), null),
+                    DailyCompletion(LocalDate.of(2026, 5, 18), "monday", true, LocalDateTime.of(2026, 5, 18, 7, 0), null),
+                ),
+                settings = RoutineSettings.Default.copy(dailyResetTime = LocalTime.of(5, 0)),
+            ),
+        )
+        val repository = RoutineRepository(store)
+
+        val board = repository.boardState(LocalDateTime.of(2026, 5, 18, 4, 30))
+
+        assertEquals(LocalDate.of(2026, 5, 17), board.routineDate)
+        assertEquals(LocalDate.of(2026, 5, 11), board.weekStart)
+        assertEquals(LocalDate.of(2026, 5, 17), board.weekEnd)
+        assertEquals(PointTotals(daily = 1, weekly = 1), board.children.single().points)
     }
 
     @Test

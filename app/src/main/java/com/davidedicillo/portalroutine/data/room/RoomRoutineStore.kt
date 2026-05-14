@@ -8,6 +8,7 @@ import com.davidedicillo.portalroutine.data.DailyCompletion
 import com.davidedicillo.portalroutine.data.RoutineSettings
 import com.davidedicillo.portalroutine.data.RoutineStore
 import com.davidedicillo.portalroutine.data.StoreSnapshot
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -75,6 +76,7 @@ class RoomRoutineStore(private val dao: RoutineDao) : RoutineStore {
         sortOrder = sortOrder,
         note = note,
         visualCue = visualCue,
+        activeDays = activeDays.toActiveDays(),
     )
 
     private fun RoutineTask.toEntity() = RoutineTaskEntity(
@@ -86,6 +88,7 @@ class RoomRoutineStore(private val dao: RoutineDao) : RoutineStore {
         note = note,
         enabled = enabled,
         sortOrder = sortOrder,
+        activeDays = activeDays.toStorageValue(),
     )
 
     private fun DailyCompletionEntity.toModel() = DailyCompletion(
@@ -122,4 +125,21 @@ class RoomRoutineStore(private val dao: RoutineDao) : RoutineStore {
         overrideWindowId = manualActiveWindowOverride?.windowId,
         overrideSetAt = manualActiveWindowOverride?.setAt?.toString(),
     )
+
+    private fun String.toActiveDays(): Set<DayOfWeek> {
+        val days = split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .mapNotNull { value -> runCatching { DayOfWeek.valueOf(value.uppercase()) }.getOrNull() }
+            .toSet()
+        return days.ifEmpty { DayOfWeek.entries.toSet() }
+    }
+
+    private fun Set<DayOfWeek>.toStorageValue(): String {
+        return if (isEmpty()) {
+            DayOfWeek.entries.joinToString(",") { it.name }
+        } else {
+            sortedBy { it.value }.joinToString(",") { it.name }
+        }
+    }
 }

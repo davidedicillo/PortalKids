@@ -5,10 +5,11 @@ import com.davidedicillo.portalroutine.core.RoutineTask
 import com.davidedicillo.portalroutine.core.RoutineWindowConfig
 import com.davidedicillo.portalroutine.data.ChildConfig
 import com.davidedicillo.portalroutine.data.RoutineRepository
+import com.davidedicillo.portalroutine.data.StoreJson
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.runBlocking
-import org.json.JSONArray
 import org.json.JSONObject
+import java.time.DayOfWeek
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.UUID
@@ -76,48 +77,8 @@ class RoutineAdminServer(
     private fun state(): Response = runBlocking {
         val snapshot = repository.snapshot()
         val board = repository.boardState(LocalDateTime.now())
-        jsonResponse(
-            JSONObject()
-                .put("adminUrl", "http://${NetworkAddress.localIpv4Address() ?: "127.0.0.1"}:8080")
-                .put("activeWindow", board.activeWindow.id)
-                .put("routineDate", board.routineDate.toString())
-                .put("children", JSONArray(snapshot.children.map { child ->
-                    JSONObject()
-                        .put("id", child.id)
-                        .put("displayName", child.displayName)
-                        .put("color", child.color)
-                        .put("sortOrder", child.sortOrder)
-                }))
-                .put("windows", JSONArray(snapshot.windows.map { window ->
-                    JSONObject()
-                        .put("id", window.id)
-                        .put("name", window.name)
-                        .put("startTime", window.startTime.toString())
-                        .put("sortOrder", window.sortOrder)
-                }))
-                .put("tasks", JSONArray(snapshot.tasks.map { task ->
-                    JSONObject()
-                        .put("id", task.id)
-                        .put("childId", task.childId)
-                        .put("windowId", task.windowId)
-                        .put("title", task.title)
-                        .put("visualCue", task.visualCue)
-                        .put("note", task.note ?: "")
-                        .put("enabled", task.enabled)
-                        .put("sortOrder", task.sortOrder)
-                }))
-                .put("settings", JSONObject()
-                    .put("dailyResetTime", snapshot.settings.dailyResetTime.toString())
-                    .put("adminServerEnabled", snapshot.settings.adminServerEnabled))
-                .put("history", JSONArray(snapshot.completions.take(100).map { completion ->
-                    JSONObject()
-                        .put("localDate", completion.localDate.toString())
-                        .put("taskId", completion.taskId)
-                        .put("completed", completion.completed)
-                        .put("completedAt", completion.completedAt?.toString() ?: "")
-                        .put("clearedAt", completion.clearedAt?.toString() ?: "")
-                })),
-        )
+        val adminUrl = "http://${NetworkAddress.localIpv4Address() ?: "127.0.0.1"}:8080"
+        jsonResponse(StoreJson.stateJson(snapshot, board, adminUrl))
     }
 
     private fun updateChild(session: IHTTPSession): Response = runBlocking {
@@ -168,6 +129,7 @@ class RoutineAdminServer(
                 sortOrder = params["sortOrder"]?.toIntOrNull() ?: 0,
                 note = params["note"]?.ifBlank { null },
                 visualCue = params["visualCue"].orEmpty().ifBlank { "⭐" },
+                activeDays = activeDays(session),
             ),
         )
         state()
@@ -198,6 +160,16 @@ class RoutineAdminServer(
 
     private fun queryParam(session: IHTTPSession, name: String): String? {
         return session.parameters[name]?.firstOrNull()
+    }
+
+    private fun activeDays(session: IHTTPSession): Set<DayOfWeek> {
+        val days = session.parameters["activeDays"].orEmpty()
+            .flatMap { it.split(",") }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .mapNotNull { value -> runCatching { DayOfWeek.valueOf(value.uppercase()) }.getOrNull() }
+            .toSet()
+        return days.ifEmpty { DayOfWeek.entries.toSet() }
     }
 
     private fun required(params: Map<String, String>, name: String): String {

@@ -5,6 +5,7 @@ import com.davidedicillo.portalroutine.core.RoutineTask
 import com.davidedicillo.portalroutine.core.RoutineWindowConfig
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -29,6 +30,7 @@ object StoreJson {
             .put("hubUrl", adminUrl)
             .put("activeWindow", board.activeWindow.id)
             .put("routineDate", board.routineDate.toString())
+            .put("points", board.pointsJson())
             .put("children", JSONArray(snapshot.children.map { it.toJson() }))
             .put("windows", JSONArray(snapshot.windows.map { it.toJson() }))
             .put("tasks", JSONArray(snapshot.tasks.map { it.toJson() }))
@@ -66,6 +68,7 @@ object StoreJson {
                     sortOrder = task.optInt("sortOrder", 0),
                     note = task.optString("note").ifBlank { null },
                     visualCue = task.optString("visualCue", "⭐").ifBlank { "⭐" },
+                    activeDays = task.activeDays(),
                 )
             },
             completions = (json.optJSONArray("completions") ?: json.optJSONArray("history") ?: JSONArray())
@@ -103,6 +106,7 @@ object StoreJson {
         .put("note", note ?: "")
         .put("enabled", enabled)
         .put("sortOrder", sortOrder)
+        .put("activeDays", JSONArray(activeDays.sortedBy { it.value }.map { it.name }))
 
     private fun DailyCompletion.toJson() = JSONObject()
         .put("localDate", localDate.toString())
@@ -110,6 +114,18 @@ object StoreJson {
         .put("completed", completed)
         .put("completedAt", completedAt?.toString() ?: "")
         .put("clearedAt", clearedAt?.toString() ?: "")
+
+    private fun BoardState.pointsJson() = JSONObject()
+        .put("weekStart", weekStart.toString())
+        .put("weekEnd", weekEnd.toString())
+        .put("children", JSONArray(children.map { childState ->
+            JSONObject()
+                .put("childId", childState.child.id)
+                .put("displayName", childState.child.displayName)
+                .put("color", childState.child.color)
+                .put("daily", childState.points.daily)
+                .put("weekly", childState.points.weekly)
+        }))
 
     private fun RoutineSettings.toJson() = JSONObject()
         .put("dailyResetTime", dailyResetTime.toString())
@@ -135,6 +151,14 @@ object StoreJson {
     }
 
     private fun JSONObject.array(name: String): JSONArray = optJSONArray(name) ?: JSONArray()
+
+    private fun JSONObject.activeDays(): Set<DayOfWeek> {
+        val days = optJSONArray("activeDays") ?: return DayOfWeek.entries.toSet()
+        if (days.length() == 0) return DayOfWeek.entries.toSet()
+        return (0 until days.length()).mapNotNull { index ->
+            runCatching { DayOfWeek.valueOf(days.getString(index).uppercase()) }.getOrNull()
+        }.toSet().ifEmpty { DayOfWeek.entries.toSet() }
+    }
 
     private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> {
         return (0 until length()).map { index -> transform(getJSONObject(index)) }

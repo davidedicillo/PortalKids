@@ -29,6 +29,7 @@ data class RoutineTaskEntity(
     val note: String?,
     val enabled: Boolean,
     val sortOrder: Int,
+    val activeDays: String,
 )
 
 @Entity(tableName = "daily_completions", primaryKeys = ["localDate", "taskId"])

@@ -1,24 +1,27 @@
 package com.davidedicillo.portalroutine
 
 import android.app.AlertDialog
-import android.app.Dialog
+import android.content.Context
 import android.content.Intent
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Bundle
+import android.os.SystemClock
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
-import android.view.Window
 import android.view.WindowManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
-import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -37,6 +40,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.random.Random
 
 class HomeActivity : AppCompatActivity() {
     private val app: PortalKidsApplication
@@ -129,7 +135,7 @@ class HomeActivity : AppCompatActivity() {
         val celebrationKey = "${board.routineDate}:${board.activeWindow.id}"
         if (board.allComplete && lastCelebrationKey != celebrationKey) {
             lastCelebrationKey = celebrationKey
-            showCelebration()
+            showCelebration(root)
         } else if (!board.allComplete) {
             lastCelebrationKey = null
         }
@@ -204,6 +210,14 @@ class HomeActivity : AppCompatActivity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(text("${progress.completed} of ${progress.total} done", 18f, Color.rgb(56, 68, 78), Typeface.BOLD))
+            addView(
+                text(
+                    "Today ${childState.points.daily} pts · Week ${childState.points.weekly} pts",
+                    16f,
+                    Color.rgb(73, 85, 96),
+                    Typeface.BOLD,
+                ).withTopMargin(2),
+            )
             addView(ProgressBar(this@HomeActivity, null, android.R.attr.progressBarStyleHorizontal).apply {
                 max = progress.total.coerceAtLeast(1)
                 this.progress = progress.completed
@@ -448,23 +462,174 @@ class HomeActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showCelebration() {
-        val dialog = Dialog(this)
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        dialog.setContentView(text("Routine complete!", 42f, Color.WHITE, Typeface.BOLD).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(36), dp(36), dp(36), dp(36))
-            background = rounded(Color.rgb(31, 138, 112), dp(8), Color.rgb(31, 138, 112))
-            setOnClickListener { dialog.dismiss() }
-        })
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.show()
-        dialog.window?.setLayout(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
+    private fun showCelebration(root: FrameLayout) {
+        val overlay = CelebrationOverlayView(this).apply {
+            setOnClickListener {
+                (parent as? FrameLayout)?.removeView(this)
+            }
+        }
+        root.addView(overlay, FrameLayout.LayoutParams(match(), match()))
+        playCelebrationChime()
         lifecycleScope.launch {
-            delay(3500)
-            if (dialog.isShowing) dialog.dismiss()
+            delay(4_500)
+            if (overlay.parent === root) {
+                root.removeView(overlay)
+            }
         }
     }
+
+    private fun playCelebrationChime() {
+        val tone = try {
+            ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+        } catch (_: RuntimeException) {
+            return
+        }
+        if (!tone.startTone(ToneGenerator.TONE_PROP_ACK, 220)) {
+            tone.release()
+            return
+        }
+        lifecycleScope.launch {
+            delay(320)
+            tone.release()
+        }
+    }
+
+    private class CelebrationOverlayView(context: Context) : View(context) {
+        private val colors = intArrayOf(
+            Color.rgb(255, 209, 102),
+            Color.rgb(239, 71, 111),
+            Color.rgb(6, 214, 160),
+            Color.rgb(17, 138, 178),
+            Color.rgb(255, 255, 255),
+        )
+        private val random = Random(SystemClock.uptimeMillis())
+        private val particles = List(150) {
+            CelebrationParticle(
+                x = random.nextFloat(),
+                offset = random.nextFloat(),
+                durationMs = random.nextInt(2_200, 3_900).toFloat(),
+                sway = random.nextInt(24, 92).toFloat(),
+                sizeDp = random.nextInt(7, 18).toFloat(),
+                rotation = random.nextInt(0, 360).toFloat(),
+                color = colors[random.nextInt(colors.size)],
+                round = random.nextBoolean(),
+            )
+        }
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        private val subtitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(255, 245, 220)
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        private val startTime = SystemClock.uptimeMillis()
+        private val rect = RectF()
+
+        init {
+            isClickable = true
+            isFocusable = true
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val widthF = width.toFloat()
+            val heightF = height.toFloat()
+            val elapsed = (SystemClock.uptimeMillis() - startTime).coerceAtLeast(0).toFloat()
+
+            paint.style = Paint.Style.FILL
+            paint.color = Color.rgb(18, 52, 59)
+            paint.alpha = 215
+            canvas.drawRect(0f, 0f, widthF, heightF, paint)
+            paint.alpha = 255
+
+            drawFireworks(canvas, widthF, heightF, elapsed)
+            drawConfetti(canvas, widthF, heightF, elapsed)
+
+            titlePaint.textSize = (heightF.coerceAtMost(widthF) * 0.105f).coerceIn(42f, 86f)
+            subtitlePaint.textSize = (heightF.coerceAtMost(widthF) * 0.043f).coerceIn(22f, 36f)
+            canvas.drawText("Great job!", widthF / 2f, heightF * 0.46f, titlePaint)
+            canvas.drawText("Routine complete", widthF / 2f, heightF * 0.54f, subtitlePaint)
+
+            postInvalidateOnAnimation()
+        }
+
+        private fun drawConfetti(canvas: Canvas, widthF: Float, heightF: Float, elapsed: Float) {
+            val density = resources.displayMetrics.density
+            particles.forEach { particle ->
+                val phase = ((elapsed / particle.durationMs) + particle.offset) % 1f
+                val x = particle.x * widthF + sin((phase * 2f * PI) + particle.offset).toFloat() * particle.sway
+                val y = -heightF * 0.18f + phase * heightF * 1.35f
+                val size = particle.sizeDp * density
+
+                paint.style = Paint.Style.FILL
+                paint.color = particle.color
+                paint.alpha = (100 + ((1f - phase) * 155f)).toInt().coerceIn(90, 255)
+
+                canvas.save()
+                canvas.rotate(particle.rotation + phase * 360f, x, y)
+                if (particle.round) {
+                    canvas.drawCircle(x, y, size * 0.45f, paint)
+                } else {
+                    rect.set(x - size * 0.55f, y - size * 0.28f, x + size * 0.55f, y + size * 0.28f)
+                    canvas.drawRoundRect(rect, size * 0.16f, size * 0.16f, paint)
+                }
+                canvas.restore()
+            }
+            paint.alpha = 255
+        }
+
+        private fun drawFireworks(canvas: Canvas, widthF: Float, heightF: Float, elapsed: Float) {
+            val centers = listOf(
+                0.22f to 0.25f,
+                0.78f to 0.27f,
+                0.34f to 0.72f,
+                0.70f to 0.70f,
+            )
+            centers.forEachIndexed { index, center ->
+                val phase = ((elapsed / 1_500f) + index * 0.23f) % 1f
+                val radius = (28f + widthF.coerceAtMost(heightF) * 0.13f * phase)
+                val alpha = ((1f - phase) * 190f).toInt().coerceIn(0, 190)
+                val cx = widthF * center.first
+                val cy = heightF * center.second
+
+                paint.style = Paint.Style.STROKE
+                paint.strokeWidth = 4f
+                paint.color = colors[index % colors.size]
+                paint.alpha = alpha
+                canvas.drawCircle(cx, cy, radius, paint)
+
+                paint.strokeWidth = 3f
+                repeat(10) { ray ->
+                    val angle = ((ray * 36f) + phase * 70f) * (PI.toFloat() / 180f)
+                    val inner = radius * 0.58f
+                    val outer = radius * 0.86f
+                    canvas.drawLine(
+                        cx + kotlin.math.cos(angle) * inner,
+                        cy + kotlin.math.sin(angle) * inner,
+                        cx + kotlin.math.cos(angle) * outer,
+                        cy + kotlin.math.sin(angle) * outer,
+                        paint,
+                    )
+                }
+            }
+            paint.alpha = 255
+        }
+    }
+
+    private data class CelebrationParticle(
+        val x: Float,
+        val offset: Float,
+        val durationMs: Float,
+        val sway: Float,
+        val sizeDp: Float,
+        val rotation: Float,
+        val color: Int,
+        val round: Boolean,
+    )
 
     private fun launchPackage(packageName: String) {
         val intent = packageManager.getLaunchIntentForPackage(packageName)

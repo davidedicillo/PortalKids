@@ -1,5 +1,6 @@
 package com.davidedicillo.portalroutine.core
 
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -25,7 +26,12 @@ data class RoutineTask(
     val sortOrder: Int,
     val note: String? = null,
     val visualCue: String = "",
-)
+    val activeDays: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
+) {
+    fun isActiveOn(date: LocalDate): Boolean {
+        return activeDays.isEmpty() || date.dayOfWeek in activeDays
+    }
+}
 
 data class ChildProgress(
     val completed: Int,
@@ -56,8 +62,14 @@ object RoutineEngine {
         childId: String,
         windowId: String,
         completions: Set<String>,
+        routineDate: LocalDate? = null,
     ): ChildProgress {
-        val visible = tasks.filter { it.enabled && it.childId == childId && it.windowId == windowId }
+        val visible = tasks.filter { task ->
+            task.enabled &&
+                task.childId == childId &&
+                task.windowId == windowId &&
+                (routineDate == null || task.isActiveOn(routineDate))
+        }
         return ChildProgress(
             completed = visible.count { it.id in completions },
             total = visible.size,
@@ -69,10 +81,11 @@ object RoutineEngine {
         childIds: List<String>,
         windowId: String,
         completions: Set<String>,
+        routineDate: LocalDate? = null,
     ): Boolean {
         if (childIds.isEmpty()) return false
         return childIds.all { childId ->
-            childProgress(tasks, childId, windowId, completions).isComplete
+            childProgress(tasks, childId, windowId, completions, routineDate).isComplete
         }
     }
 

@@ -10,6 +10,7 @@ import com.davidedicillo.portalroutine.data.StoreJson
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -192,6 +193,7 @@ class HubServer(
                 sortOrder = params["sortOrder"]?.toIntOrNull() ?: 0,
                 note = params["note"]?.ifBlank { null },
                 visualCue = params["visualCue"].orEmpty().ifBlank { "⭐" },
+                activeDays = activeDays(session),
             ),
         )
         state()
@@ -222,6 +224,16 @@ class HubServer(
 
     private fun queryParam(session: IHTTPSession, name: String): String? {
         return session.parameters[name]?.firstOrNull()
+    }
+
+    private fun activeDays(session: IHTTPSession): Set<DayOfWeek> {
+        val days = session.parameters["activeDays"].orEmpty()
+            .flatMap { it.split(",") }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .mapNotNull { value -> runCatching { DayOfWeek.valueOf(value.uppercase()) }.getOrNull() }
+            .toSet()
+        return days.ifEmpty { DayOfWeek.entries.toSet() }
     }
 
     private fun required(params: Map<String, String>, name: String): String {

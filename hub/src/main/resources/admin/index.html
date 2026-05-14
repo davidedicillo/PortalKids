@@ -59,6 +59,10 @@
     input[type="color"] {
       padding: 6px;
     }
+    input[type="checkbox"] {
+      min-height: auto;
+      width: auto;
+    }
     button {
       border: 0;
       background: #1f8a70;
@@ -69,6 +73,11 @@
     button.danger { background: #b42318; }
     button.secondary {
       background: #31545d;
+    }
+    button.ghost {
+      background: #eef2f0;
+      color: #21343a;
+      border: 1px solid #cdd7d4;
     }
     button.compact {
       min-height: 36px;
@@ -117,8 +126,14 @@
     #taskForm label:nth-of-type(8) {
       grid-column: 2 / 3;
     }
-    #taskForm button {
-      grid-column: 3 / 4;
+    #taskForm .days-field {
+      grid-column: 3 / 7;
+    }
+    #taskForm button[type="submit"] {
+      grid-column: 1 / 2;
+    }
+    #taskForm #clearTaskForm {
+      grid-column: 2 / 3;
     }
     #resetTimeForm {
       grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr);
@@ -147,6 +162,203 @@
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 16px;
     }
+    .task-heading {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .child-tabs,
+    .mode-toggle,
+    .weekday-grid,
+    .task-day-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .child-tab,
+    .mode-toggle button {
+      width: auto;
+      min-height: 38px;
+      background: #eef2f0;
+      color: #21343a;
+      border: 1px solid #cdd7d4;
+    }
+    .child-tab.active,
+    .mode-toggle button.active {
+      background: #12343b;
+      border-color: #12343b;
+      color: white;
+    }
+    .task-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 8px;
+      margin-bottom: 8px;
+    }
+    .weekday-grid {
+      gap: 6px;
+    }
+    .weekday-toggle {
+      display: inline-flex;
+      position: relative;
+      min-width: 0;
+      font-weight: 750;
+    }
+    .weekday-toggle input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .weekday-toggle span,
+    .day-pill {
+      border: 1px solid #cad3d0;
+      border-radius: 999px;
+      color: #40505a;
+      background: #f7f8f6;
+      padding: 5px 9px;
+      font-size: .78rem;
+      line-height: 1;
+    }
+    .weekday-toggle input:checked + span {
+      background: #1f8a70;
+      border-color: #1f8a70;
+      color: white;
+    }
+    .task-workspace {
+      display: grid;
+      gap: 14px;
+    }
+    .task-window {
+      border-top: 1px solid #e4e1d9;
+      padding-top: 12px;
+    }
+    .task-window:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .window-heading {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-weight: 800;
+    }
+    .window-time {
+      color: #64717d;
+      font-size: .84rem;
+      font-weight: 650;
+    }
+    .active-window-marker {
+      color: #1f8a70;
+      font-size: .76rem;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+    .task-row {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid #e5e2da;
+      border-radius: 8px;
+      padding: 9px;
+      margin-bottom: 8px;
+      background: #fffefa;
+    }
+    .task-row.disabled {
+      opacity: .62;
+      background: #f3f1eb;
+    }
+    .task-icon {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: #eef7f3;
+      font-size: 1.3rem;
+    }
+    .task-main {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .task-title {
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+    .task-meta {
+      color: #64717d;
+      font-size: .82rem;
+    }
+    .empty-state {
+      border: 1px dashed #cfd4d0;
+      color: #64717d;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: .9rem;
+    }
+    .week-grid {
+      display: grid;
+      grid-template-columns: minmax(112px, .75fr) repeat(7, minmax(96px, 1fr));
+      overflow-x: auto;
+      border: 1px solid #e0ddd5;
+      border-radius: 8px;
+      background: #f9f8f4;
+    }
+    .week-corner,
+    .week-day,
+    .week-window,
+    .week-cell {
+      border-right: 1px solid #e0ddd5;
+      border-bottom: 1px solid #e0ddd5;
+      min-width: 0;
+      padding: 8px;
+    }
+    .week-corner,
+    .week-day,
+    .week-window {
+      font-weight: 800;
+      background: #eef2f0;
+    }
+    .week-day {
+      text-align: center;
+    }
+    .week-window {
+      display: grid;
+      align-content: start;
+      gap: 3px;
+      color: #22343a;
+    }
+    .week-cell {
+      display: grid;
+      align-content: start;
+      gap: 5px;
+      min-height: 74px;
+      background: white;
+    }
+    .task-chip {
+      display: block;
+      border-radius: 6px;
+      padding: 5px 6px;
+      background: #e8f5ee;
+      color: #173b31;
+      font-size: .78rem;
+      font-weight: 750;
+      overflow-wrap: anywhere;
+    }
+    .task-chip.disabled {
+      background: #efede8;
+      color: #707b83;
+      text-decoration: line-through;
+    }
     @media (max-width: 900px) {
       main {
         padding: 12px;
@@ -167,6 +379,16 @@
       #resetTimeForm label,
       #resetTimeForm button {
         grid-column: auto;
+      }
+      #taskForm .days-field {
+        grid-column: 1 / -1;
+      }
+      .task-row {
+        grid-template-columns: 40px minmax(0, 1fr);
+      }
+      .task-row .actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
       }
     }
     @media (max-width: 560px) {
@@ -223,7 +445,13 @@
       </div>
 
       <section>
-        <h2>Tasks</h2>
+        <div class="task-heading">
+          <div>
+            <h2>Tasks</h2>
+            <p id="selectedChildSummary" class="muted"></p>
+          </div>
+          <div id="childTabs" class="child-tabs" role="tablist" aria-label="Children"></div>
+        </div>
         <form id="taskForm">
           <label>ID <input name="id" placeholder="blank for new"></label>
           <label>Child <select name="childId"></select></label>
@@ -233,9 +461,16 @@
           <label>Note <input name="note"></label>
           <label>Order <input name="sortOrder" type="number" value="0"></label>
           <label>Enabled <select name="enabled"><option value="true">Yes</option><option value="false">No</option></select></label>
+          <label class="days-field">Days <span id="activeDaysGroup" class="weekday-grid"></span></label>
           <button type="submit">Save Task</button>
+          <button id="clearTaskForm" class="ghost" type="button">New Task</button>
         </form>
-        <table id="tasksTable"></table>
+        <div class="task-toolbar">
+          <strong id="taskCount"></strong>
+          <div id="taskViewToggle" class="mode-toggle" aria-label="Task view"></div>
+        </div>
+        <div id="tasksBoard" class="task-workspace"></div>
+        <div id="scheduleTimeline"></div>
       </section>
 
       <section>
@@ -248,6 +483,12 @@
       </section>
 
       <section>
+        <h2>Points</h2>
+        <p id="pointsWeek" class="muted"></p>
+        <table id="pointsTable"></table>
+      </section>
+
+      <section>
         <h2>Recent History</h2>
         <table id="historyTable"></table>
       </section>
@@ -256,6 +497,19 @@
   <script>
     let token = localStorage.getItem("portalKidsToken") || "";
     let state = null;
+    let selectedChildId = localStorage.getItem("portalKidsSelectedChild") || "";
+    let taskViewMode = localStorage.getItem("portalKidsTaskView") || "list";
+
+    const dayOptions = [
+      ["MONDAY", "Mon"],
+      ["TUESDAY", "Tue"],
+      ["WEDNESDAY", "Wed"],
+      ["THURSDAY", "Thu"],
+      ["FRIDAY", "Fri"],
+      ["SATURDAY", "Sat"],
+      ["SUNDAY", "Sun"]
+    ];
+    const allDays = dayOptions.map(day => day[0]);
 
     const post = async (path, data) => {
       const response = await fetch(`${path}?token=${encodeURIComponent(token)}`, {
@@ -290,6 +544,180 @@
       });
     };
 
+    const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, character => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#039;"
+    }[character]));
+
+    const taskActiveDays = task => {
+      const days = Array.isArray(task.activeDays) && task.activeDays.length ? task.activeDays : allDays;
+      return days.filter(day => allDays.includes(day));
+    };
+
+    const activeDaysLabel = task => {
+      const days = taskActiveDays(task);
+      if (days.length === allDays.length) return "Every day";
+      return dayOptions.filter(day => days.includes(day[0])).map(day => day[1]).join(", ");
+    };
+
+    const renderDayControls = (days = allDays) => {
+      const selected = new Set(days.length ? days : allDays);
+      document.getElementById("activeDaysGroup").innerHTML = dayOptions.map(([value, label]) => `
+        <label class="weekday-toggle">
+          <input type="checkbox" name="activeDays" value="${value}" ${selected.has(value) ? "checked" : ""}>
+          <span>${label}</span>
+        </label>
+      `).join("");
+    };
+
+    const setTaskFormDays = days => {
+      const selected = new Set(days.length ? days : allDays);
+      document.querySelectorAll("#activeDaysGroup input[name='activeDays']").forEach(input => {
+        input.checked = selected.has(input.value);
+      });
+    };
+
+    const ensureSelectedChild = () => {
+      if (!state.children.some(child => child.id === selectedChildId)) {
+        selectedChildId = state.children[0]?.id || "";
+      }
+      if (selectedChildId) localStorage.setItem("portalKidsSelectedChild", selectedChildId);
+    };
+
+    const selectedChild = () => state.children.find(child => child.id === selectedChildId) || state.children[0];
+
+    const windowForTask = task => state.windows.find(window => window.id === task.windowId);
+
+    const compareTasks = (left, right) => {
+      const leftWindow = windowForTask(left);
+      const rightWindow = windowForTask(right);
+      return (leftWindow?.sortOrder ?? 0) - (rightWindow?.sortOrder ?? 0) ||
+        (left.sortOrder ?? 0) - (right.sortOrder ?? 0) ||
+        left.title.localeCompare(right.title);
+    };
+
+    const tasksForSelectedChild = () => state.tasks
+      .filter(task => task.childId === selectedChildId)
+      .sort(compareTasks);
+
+    const syncTaskFormToSelectedChild = () => {
+      const form = document.getElementById("taskForm");
+      if (selectedChildId) {
+        form.elements.namedItem("childId").value = selectedChildId;
+      }
+    };
+
+    const clearTaskForm = () => {
+      const form = document.getElementById("taskForm");
+      form.reset();
+      form.elements.namedItem("id").value = "";
+      form.elements.namedItem("sortOrder").value = "0";
+      form.elements.namedItem("enabled").value = "true";
+      if (selectedChildId) form.elements.namedItem("childId").value = selectedChildId;
+      renderDayControls();
+    };
+
+    const fillTaskForm = task => {
+      selectedChildId = task.childId;
+      localStorage.setItem("portalKidsSelectedChild", selectedChildId);
+      render();
+      fillForm("taskForm", { ...task, enabled: String(task.enabled) });
+      setTaskFormDays(taskActiveDays(task));
+    };
+
+    const renderChildTabs = () => {
+      document.getElementById("childTabs").innerHTML = state.children.map(child => `
+        <button type="button" class="child-tab ${child.id === selectedChildId ? "active" : ""}" data-child-tab="${child.id}" style="border-color: ${escapeHtml(child.color)}">
+          ${escapeHtml(child.displayName)}
+        </button>
+      `).join("");
+    };
+
+    const renderTaskViewToggle = () => {
+      document.getElementById("taskViewToggle").innerHTML = [
+        ["list", "List"],
+        ["week", "Week"]
+      ].map(([value, label]) => `
+        <button type="button" class="${taskViewMode === value ? "active" : ""}" data-task-view="${value}">
+          ${label}
+        </button>
+      `).join("");
+    };
+
+    const taskRow = task => `
+      <div class="task-row ${task.enabled ? "" : "disabled"}">
+        <div class="task-icon">${escapeHtml(task.visualCue || "⭐")}</div>
+        <div class="task-main">
+          <div class="task-title">${escapeHtml(task.title)}</div>
+          <div class="task-meta">${escapeHtml(activeDaysLabel(task))}${task.note ? ` · ${escapeHtml(task.note)}` : ""}</div>
+          <div class="task-day-pills">
+            ${taskActiveDays(task).map(day => `<span class="day-pill">${dayOptions.find(option => option[0] === day)?.[1] || day}</span>`).join("")}
+          </div>
+        </div>
+        <span class="actions">
+          <button data-edit-task="${escapeHtml(task.id)}" class="secondary compact" type="button">Edit</button>
+          <button data-delete-task="${escapeHtml(task.id)}" class="danger compact" type="button">Delete</button>
+        </span>
+      </div>
+    `;
+
+    const renderTaskList = rows => {
+      document.getElementById("tasksBoard").hidden = taskViewMode !== "list";
+      if (taskViewMode !== "list") return;
+      document.getElementById("tasksBoard").innerHTML = state.windows.map(window => {
+        const tasks = rows.filter(task => task.windowId === window.id);
+        return `
+          <div class="task-window">
+            <div class="window-heading">
+              <span>${escapeHtml(window.name)} <span class="window-time">${escapeHtml(window.startTime)}</span></span>
+              ${state.activeWindow === window.id ? `<span class="active-window-marker">Active</span>` : ""}
+            </div>
+            ${tasks.length ? tasks.map(taskRow).join("") : `<div class="empty-state">No tasks</div>`}
+          </div>
+        `;
+      }).join("");
+    };
+
+    const renderScheduleTimeline = rows => {
+      const timeline = document.getElementById("scheduleTimeline");
+      timeline.hidden = taskViewMode !== "week";
+      if (taskViewMode !== "week") return;
+      const header = `<div class="week-corner"></div>${dayOptions.map(day => `<div class="week-day">${day[1]}</div>`).join("")}`;
+      const body = state.windows.map(window => {
+        const cells = dayOptions.map(([day]) => {
+          const tasks = rows.filter(task => task.windowId === window.id && taskActiveDays(task).includes(day));
+          return `<div class="week-cell">${tasks.map(task => `<span class="task-chip ${task.enabled ? "" : "disabled"}">${escapeHtml(task.visualCue || "⭐")} ${escapeHtml(task.title)}</span>`).join("")}</div>`;
+        }).join("");
+        return `
+          <div class="week-window">
+            <span>${escapeHtml(window.name)}</span>
+            <span class="window-time">${escapeHtml(window.startTime)}</span>
+          </div>
+          ${cells}
+        `;
+      }).join("");
+      timeline.innerHTML = `<div class="week-grid">${header}${body}</div>`;
+    };
+
+    const renderTasks = () => {
+      ensureSelectedChild();
+      const checkedDays = Array.from(document.querySelectorAll("#activeDaysGroup input[name='activeDays']:checked")).map(input => input.value);
+      renderDayControls(checkedDays.length ? checkedDays : allDays);
+      syncTaskFormToSelectedChild();
+      renderChildTabs();
+      renderTaskViewToggle();
+      const child = selectedChild();
+      const rows = tasksForSelectedChild();
+      const enabledCount = rows.filter(task => task.enabled).length;
+      document.getElementById("selectedChildSummary").textContent = child ? `${child.displayName} · ${enabledCount} enabled / ${rows.length} total` : "";
+      document.getElementById("taskCount").textContent = child ? `${child.displayName} schedule` : "";
+      renderTaskList(rows);
+      renderScheduleTimeline(rows);
+    };
+
     const render = () => {
       document.getElementById("meta").textContent = `${state.adminUrl} | ${state.routineDate} | active: ${state.activeWindow}`;
       optionList("childId", state.children, "displayName");
@@ -303,9 +731,12 @@
         ["Name", r => r.name], ["ID", r => r.id], ["Start", r => r.startTime], ["Order", r => r.sortOrder],
         ["", r => `<span class="actions"><button data-edit-window="${r.id}" class="secondary compact">Edit</button><button data-delete-window="${r.id}" class="danger compact">Delete</button></span>`]
       ]);
-      renderTable("tasksTable", state.tasks, [
-        ["Icon", r => r.visualCue], ["Title", r => r.title], ["Child", r => r.childId], ["Window", r => r.windowId],
-        ["Enabled", r => r.enabled ? "Yes" : "No"], ["", r => `<span class="actions"><button data-edit-task="${r.id}" class="secondary compact">Edit</button><button data-delete-task="${r.id}" class="danger compact">Delete</button></span>`]
+      renderTasks();
+      const points = state.points || { children: [] };
+      document.getElementById("pointsWeek").textContent =
+        points.weekStart && points.weekEnd ? `Week ${points.weekStart} to ${points.weekEnd}` : "";
+      renderTable("pointsTable", points.children || [], [
+        ["Child", r => r.displayName], ["Today", r => `${r.daily} pts`], ["Week", r => `${r.weekly} pts`]
       ]);
       renderTable("historyTable", state.history, [
         ["Date", r => r.localDate], ["Task", r => r.taskId], ["Done", r => r.completed ? "Yes" : "No"],
@@ -337,10 +768,30 @@
           render();
         };
       });
+      document.querySelectorAll("[data-child-tab]").forEach(button => {
+        button.onclick = () => {
+          selectedChildId = button.dataset.childTab;
+          localStorage.setItem("portalKidsSelectedChild", selectedChildId);
+          clearTaskForm();
+          render();
+        };
+      });
+      document.querySelectorAll("[data-task-view]").forEach(button => {
+        button.onclick = () => {
+          taskViewMode = button.dataset.taskView;
+          localStorage.setItem("portalKidsTaskView", taskViewMode);
+          render();
+        };
+      });
+      document.querySelector("#taskForm select[name='childId']").onchange = event => {
+        selectedChildId = event.target.value;
+        localStorage.setItem("portalKidsSelectedChild", selectedChildId);
+        render();
+      };
       document.querySelectorAll("[data-edit-task]").forEach(button => {
         button.onclick = () => {
           const task = state.tasks.find(row => row.id === button.dataset.editTask);
-          fillForm("taskForm", { ...task, enabled: String(task.enabled) });
+          if (task) fillTaskForm(task);
         };
       });
       document.querySelectorAll("[data-delete-task]").forEach(button => {
@@ -381,7 +832,13 @@
 
     document.getElementById("childForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/children", new FormData(event.target)); render(); };
     document.getElementById("windowForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/windows", new FormData(event.target)); render(); };
-    document.getElementById("taskForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/tasks", new FormData(event.target)); event.target.reset(); render(); };
+    document.getElementById("taskForm").onsubmit = async event => {
+      event.preventDefault();
+      state = await post("/api/tasks", new FormData(event.target));
+      clearTaskForm();
+      render();
+    };
+    document.getElementById("clearTaskForm").onclick = clearTaskForm;
     document.getElementById("resetTimeForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/settings/reset-time", new FormData(event.target)); render(); };
     document.getElementById("resetDay").onclick = async () => { state = await post("/api/reset", {}); render(); };
     if (token) load().catch(() => {});

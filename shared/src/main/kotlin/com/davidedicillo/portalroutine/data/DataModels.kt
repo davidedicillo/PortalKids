@@ -61,15 +61,23 @@ data class BoardTask(
     val completed: Boolean,
 )
 
+data class PointTotals(
+    val daily: Int = 0,
+    val weekly: Int = 0,
+)
+
 data class ChildBoardState(
     val child: ChildConfig,
     val tasks: List<BoardTask>,
     val progress: ChildProgress,
+    val points: PointTotals,
 )
 
 data class BoardState(
     val routineDate: LocalDate,
     val activeWindow: RoutineWindowConfig,
+    val weekStart: LocalDate,
+    val weekEnd: LocalDate,
     val children: List<ChildBoardState>,
     val allComplete: Boolean,
     val settings: RoutineSettings,
