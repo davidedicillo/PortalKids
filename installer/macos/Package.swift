@@ -7,17 +7,17 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "PortalKidsInstallerCore", targets: ["PortalKidsInstallerCore"]),
-        .executable(name: "PortalKidsInstaller", targets: ["PortalKidsInstaller"]),
+        .executable(name: "PortalKidsInstaller", targets: ["PortalKidsInstaller"])
     ],
     targets: [
         .target(name: "PortalKidsInstallerCore"),
         .executableTarget(
             name: "PortalKidsInstaller",
-            dependencies: ["PortalKidsInstallerCore"],
+            dependencies: ["PortalKidsInstallerCore"]
         ),
         .testTarget(
             name: "PortalKidsInstallerCoreTests",
-            dependencies: ["PortalKidsInstallerCore"],
-        ),
-    ],
+            dependencies: ["PortalKidsInstallerCore"]
+        )
+    ]
 )
