@@ -38,7 +38,12 @@ swift build \
   -c release
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR/platform-tools" "$RESOURCES_DIR/hub" "$RESOURCES_DIR/.toolchains"
+mkdir -p \
+  "$MACOS_DIR" \
+  "$RESOURCES_DIR/platform-tools" \
+  "$RESOURCES_DIR/hub/build/install/hub" \
+  "$RESOURCES_DIR/hub/scripts" \
+  "$RESOURCES_DIR/.toolchains"
 
 cp "$ROOT_DIR/installer/macos/.build/release/PortalKidsInstaller" "$MACOS_DIR/PortalKidsInstaller"
 cp "$ADB_PATH" "$RESOURCES_DIR/platform-tools/adb"
