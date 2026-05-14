@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PortalKids</title>
+    <meta name="description" content="A simple routine board for Meta Portal devices, with a Mac installer for non-technical families.">
+    <meta property="og:title" content="PortalKids">
+    <meta property="og:description" content="A small open-source routine board for Meta Portal devices.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://davidedicillo.github.io/PortalKids/">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header" aria-label="PortalKids">
+      <a class="brand" href="#top" aria-label="PortalKids home">
+        <span class="brand-mark" aria-hidden="true">PK</span>
+        <span>PortalKids</span>
+      </a>
+      <nav aria-label="Main navigation">
+        <a href="#install">Install</a>
+        <a href="#questions">Notes</a>
+        <a href="https://github.com/davidedicillo/PortalKids">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="routine-scene" aria-hidden="true">
+          <div class="portal-frame">
+            <div class="portal-topbar">
+              <span>Morning</span>
+            </div>
+            <div class="kid-board">
+              <div class="kid-column kid-a">
+                <div class="kid-name">Kid A</div>
+                <div class="task done"><span>🪥</span><strong>Brush teeth</strong></div>
+                <div class="task done"><span>👕</span><strong>Get dressed</strong></div>
+                <div class="task"><span>🎒</span><strong>Pack backpack</strong></div>
+              </div>
+              <div class="kid-column kid-b">
+                <div class="kid-name">Kid B</div>
+                <div class="task done"><span>🍎</span><strong>Snack</strong></div>
+                <div class="task"><span>👟</span><strong>Shoes</strong></div>
+                <div class="task"><span>📚</span><strong>Books</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-copy">
+          <p class="eyebrow">Open-source routine board for Meta Portal</p>
+          <h1 id="hero-title">PortalKids</h1>
+          <p class="lede">
+            I built this for our kitchen Portal so my kids can see routines, tap off tasks, and use icons before they can read everything.
+            A few parents asked for it, so this is the simplest installer path I have so far.
+          </p>
+          <div class="hero-actions" aria-label="Download and source links">
+            <a class="button primary" href="https://github.com/davidedicillo/PortalKids/releases/latest/download/PortalKids-Installer-Mac.zip">Download Mac installer</a>
+            <a class="button secondary" href="https://github.com/davidedicillo/PortalKids">View source</a>
+          </div>
+          <p class="small-note">Early build. Free, home-network focused, and not an App Store app.</p>
+        </div>
+      </section>
+
+      <section class="download-panel" id="install" aria-labelledby="install-title">
+        <div>
+          <p class="eyebrow">Beginner path</p>
+          <h2 id="install-title">Install from a Mac over USB</h2>
+          <p>
+            The installer includes the Android tools, the PortalKids app, and the optional Mac hub. You do not need Android Studio or Java installed.
+          </p>
+        </div>
+        <ol class="steps">
+          <li>
+            <span class="step-icon">1</span>
+            <div>
+              <strong>Enable USB debugging</strong>
+              <p>Turn on developer options on the Portal, then allow USB debugging.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-icon">2</span>
+            <div>
+              <strong>Connect the Portal</strong>
+              <p>Plug it into the Mac with USB and wait for the installer to show it is ready.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-icon">3</span>
+            <div>
+              <strong>Click install</strong>
+              <p>The Portal app starts standalone. The Mac hub is optional for always-on admin and backups.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="plain-section" aria-labelledby="what-title">
+        <h2 id="what-title">What it does</h2>
+        <div class="feature-grid">
+          <article>
+            <h3>Kid-facing board</h3>
+            <p>Large task tiles, visual cues, two-child layout, and simple tap-to-complete behavior.</p>
+          </article>
+          <article>
+            <h3>Parent admin</h3>
+            <p>Edit children, routine windows, tasks, icons, colors, and reset times from a local web page.</p>
+          </article>
+          <article>
+            <h3>Standalone first</h3>
+            <p>The Portal can run by itself. An always-on Mac hub is available if you want central admin or multiple Portals later.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="note-section" id="questions" aria-labelledby="notes-title">
+        <h2 id="notes-title">A few honest notes</h2>
+        <ul>
+          <li>This is a personal open-source project, not a commercial product or paid service.</li>
+          <li>The current Mac installer is ad-hoc signed. If macOS blocks it, right-click the app and choose Open.</li>
+          <li>It is meant for home networks. There is no cloud account or remote access service.</li>
+          <li>If something breaks, open an issue on GitHub with the Portal model, macOS version, and what the installer showed.</li>
+        </ul>
+        <div class="footer-actions">
+          <a class="text-link" href="https://github.com/davidedicillo/PortalKids/releases/latest">Release notes</a>
+          <a class="text-link" href="https://github.com/davidedicillo/PortalKids/issues">Ask for help</a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

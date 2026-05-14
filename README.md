@@ -2,6 +2,10 @@
 
 PortalKids is a simple routine board for Meta Portal devices. It is designed to work by itself on the Portal first, with an optional Mac hub for always-on admin/backups.
 
+Website: <https://davidedicillo.github.io/PortalKids/>
+
+Latest Mac installer: <https://github.com/davidedicillo/PortalKids/releases/latest/download/PortalKids-Installer-Mac.zip>
+
 ## Easiest Install Path
 
 1. Download `PortalKids Installer for Mac`.
@@ -39,4 +43,10 @@ Developer USB install without the GUI:
 
 ```bash
 installer/scripts/install-portal-usb.sh
+```
+
+Create the release zip locally:
+
+```bash
+installer/scripts/package-release.sh
 ```

@@ -26,6 +26,14 @@ The packaged app expects these files in `Contents/Resources`:
 
 The build script assembles this layout from the local Gradle and toolchain outputs.
 
+For a downloadable release asset:
+
+```bash
+./installer/scripts/package-release.sh
+```
+
+That creates `installer/dist/PortalKids-Installer-Mac.zip` and a matching SHA-256 checksum file. Pushing a `v*` tag runs the GitHub release workflow and attaches those files to the release.
+
 When the optional hub is installed from the packaged app, `hub/scripts/install-launch-agent.sh` copies those bundled runtime files into `~/.portalkids/runtime` before creating the LaunchAgent. The installer app bundle does not need to remain in place after hub installation.
 
 ## States

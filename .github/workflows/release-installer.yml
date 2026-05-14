@@ -1,0 +1,65 @@
+name: Release Mac installer
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac-installer:
+    name: Build and attach installer
+    runs-on: macos-14
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Build installer zip
+        shell: bash
+        run: ADB_PATH="$ANDROID_HOME/platform-tools/adb" installer/scripts/package-release.sh
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PortalKids-Installer-Mac
+          path: |
+            installer/dist/PortalKids-Installer-Mac.zip
+            installer/dist/PortalKids-Installer-Mac.zip.sha256
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          NOTES="PortalKids Mac installer. This is an early community build: macOS may require right-click, then Open because the app is not notarized yet."
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" \
+              installer/dist/PortalKids-Installer-Mac.zip \
+              installer/dist/PortalKids-Installer-Mac.zip.sha256 \
+              --clobber
+          else
+            gh release create "$TAG_NAME" \
+              installer/dist/PortalKids-Installer-Mac.zip \
+              installer/dist/PortalKids-Installer-Mac.zip.sha256 \
+              --title "$TAG_NAME" \
+              --notes "$NOTES"
+          fi
