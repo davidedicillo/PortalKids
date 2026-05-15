@@ -518,14 +518,47 @@
         body: new URLSearchParams(data)
       });
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Request failed");
+      if (!response.ok) {
+        const error = new Error(json.error || "Request failed");
+        error.status = response.status;
+        throw error;
+      }
       return json;
+    };
+
+    const handleRequestError = error => {
+      const message = error?.message || "Request failed";
+      if (error?.status === 401 || error?.status === 403 || message.includes("PIN login required")) {
+        token = "";
+        localStorage.removeItem("portalKidsToken");
+        document.getElementById("admin").hidden = true;
+        document.getElementById("login").hidden = false;
+        document.getElementById("loginError").textContent = `${message}. Unlock again to save changes.`;
+        document.querySelector("#loginForm input[name='pin']").focus();
+        return;
+      }
+      alert(message);
+    };
+
+    const postAndRender = async (path, data) => {
+      try {
+        state = await post(path, data);
+        render();
+        return true;
+      } catch (error) {
+        handleRequestError(error);
+        return false;
+      }
     };
 
     const load = async () => {
       const response = await fetch(`/api/state?token=${encodeURIComponent(token)}`);
       const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "Login required");
+      if (!response.ok) {
+        const error = new Error(json.error || "Login required");
+        error.status = response.status;
+        throw error;
+      }
       state = json;
       document.getElementById("login").hidden = true;
       document.getElementById("admin").hidden = false;
@@ -751,8 +784,7 @@
       document.querySelectorAll("[data-delete-child]").forEach(button => {
         button.onclick = async () => {
           if (state.children.length <= 1 || !confirm("Delete this child and their assigned tasks?")) return;
-          state = await post("/api/children/delete", { id: button.dataset.deleteChild });
-          render();
+          await postAndRender("/api/children/delete", { id: button.dataset.deleteChild });
         };
       });
       document.querySelectorAll("[data-edit-window]").forEach(button => {
@@ -764,8 +796,7 @@
       document.querySelectorAll("[data-delete-window]").forEach(button => {
         button.onclick = async () => {
           if (state.windows.length <= 1 || !confirm("Delete this routine window and its assigned tasks?")) return;
-          state = await post("/api/windows/delete", { id: button.dataset.deleteWindow });
-          render();
+          await postAndRender("/api/windows/delete", { id: button.dataset.deleteWindow });
         };
       });
       document.querySelectorAll("[data-child-tab]").forEach(button => {
@@ -797,8 +828,7 @@
       document.querySelectorAll("[data-delete-task]").forEach(button => {
         button.onclick = async () => {
           if (!confirm("Delete this task?")) return;
-          state = await post("/api/tasks/delete", { id: button.dataset.deleteTask });
-          render();
+          await postAndRender("/api/tasks/delete", { id: button.dataset.deleteTask });
         };
       });
     };
@@ -830,18 +860,17 @@
       await load();
     };
 
-    document.getElementById("childForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/children", new FormData(event.target)); render(); };
-    document.getElementById("windowForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/windows", new FormData(event.target)); render(); };
+    document.getElementById("childForm").onsubmit = async event => { event.preventDefault(); await postAndRender("/api/children", new FormData(event.target)); };
+    document.getElementById("windowForm").onsubmit = async event => { event.preventDefault(); await postAndRender("/api/windows", new FormData(event.target)); };
     document.getElementById("taskForm").onsubmit = async event => {
       event.preventDefault();
-      state = await post("/api/tasks", new FormData(event.target));
-      clearTaskForm();
-      render();
+      const saved = await postAndRender("/api/tasks", new FormData(event.target));
+      if (saved) clearTaskForm();
     };
     document.getElementById("clearTaskForm").onclick = clearTaskForm;
-    document.getElementById("resetTimeForm").onsubmit = async event => { event.preventDefault(); state = await post("/api/settings/reset-time", new FormData(event.target)); render(); };
-    document.getElementById("resetDay").onclick = async () => { state = await post("/api/reset", {}); render(); };
-    if (token) load().catch(() => {});
+    document.getElementById("resetTimeForm").onsubmit = async event => { event.preventDefault(); await postAndRender("/api/settings/reset-time", new FormData(event.target)); };
+    document.getElementById("resetDay").onclick = async () => { await postAndRender("/api/reset", {}); };
+    if (token) load().catch(handleRequestError);
   </script>
 </body>
 </html>
