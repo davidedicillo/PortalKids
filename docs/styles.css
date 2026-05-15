@@ -101,7 +101,7 @@ nav a:hover {
 
 .routine-scene {
   position: absolute;
-  inset: 82px 18px auto auto;
+  inset: 82px 42px auto auto;
   min-width: 0;
   width: min(760px, 64vw);
   height: 560px;
@@ -380,14 +380,14 @@ h3 {
   font-weight: 800;
 }
 
-@media (max-width: 1280px) {
+@media (min-width: 1281px) and (max-width: 1920px) {
   .hero {
     display: grid;
-    grid-template-columns: minmax(0, 620px) minmax(420px, 650px);
-    gap: 36px;
+    grid-template-columns: minmax(0, 600px) minmax(560px, 760px);
+    gap: clamp(34px, 3vw, 48px);
     justify-content: center;
     align-items: center;
-    min-height: 620px;
+    min-height: 700px;
     padding: 122px 28px 58px;
     background:
       radial-gradient(circle at 82% 12%, rgba(243, 199, 79, 0.16), transparent 32%),
@@ -401,7 +401,39 @@ h3 {
     grid-column: 2;
     grid-row: 1;
     width: 100%;
-    height: 430px;
+    height: clamp(500px, 29vw, 540px);
+    transform: rotate(-3deg);
+  }
+
+  .hero-copy {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+}
+
+@media (max-width: 1280px) {
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 620px) minmax(420px, 650px);
+    gap: 36px;
+    justify-content: center;
+    align-items: center;
+    min-height: 660px;
+    padding: 122px 28px 58px;
+    background:
+      radial-gradient(circle at 82% 12%, rgba(243, 199, 79, 0.16), transparent 32%),
+      var(--paper);
+  }
+
+  .routine-scene {
+    position: relative;
+    inset: auto;
+    z-index: 1;
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    height: 470px;
     transform: rotate(-3deg);
   }
 
@@ -420,13 +452,7 @@ h3 {
   }
 }
 
-@media (max-width: 920px) {
-  .site-header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-  }
-
+@media (max-width: 1120px) {
   .hero {
     grid-template-columns: minmax(0, 1fr);
     min-height: auto;
@@ -463,6 +489,14 @@ h3 {
   .download-panel,
   .feature-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 920px) {
+  .site-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
 }
 
