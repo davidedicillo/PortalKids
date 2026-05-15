@@ -177,7 +177,8 @@ nav a:hover {
 
 .task strong {
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .task.done {
@@ -471,8 +472,9 @@ h3 {
   }
 
   nav {
-    width: 100%;
+    width: calc(100vw - 40px);
     justify-content: space-between;
+    gap: 10px;
   }
 
   .hero {
@@ -482,40 +484,71 @@ h3 {
   }
 
   .routine-scene {
-    width: 100%;
-    max-width: 520px;
-    height: 300px;
+    width: calc(100vw - 72px);
+    max-width: 360px;
+    height: 326px;
     margin: 26px auto 0;
     opacity: 1;
     transform: rotate(-1deg);
   }
 
   .hero-copy {
-    max-width: 100%;
+    width: calc(100vw - 40px);
+    max-width: calc(100vw - 40px);
     min-width: 0;
+    margin: 0;
   }
 
   .portal-frame {
     padding: 18px;
     border-width: 8px;
+    border-radius: 24px;
   }
 
   .portal-topbar {
     font-size: 18px;
+    margin-bottom: 12px;
+  }
+
+  .kid-board {
+    grid-template-columns: 1fr;
+    height: calc(100% - 42px);
+  }
+
+  .kid-column.kid-b {
+    display: none;
   }
 
   .kid-column {
-    padding: 12px;
+    padding: 16px;
+  }
+
+  .kid-column .task:last-child {
+    display: none;
+  }
+
+  .kid-name {
+    font-size: 30px;
+    line-height: 1.05;
   }
 
   .task {
-    grid-template-columns: 44px 1fr;
-    min-height: 68px;
-    font-size: 17px;
+    grid-template-columns: 52px minmax(0, 1fr);
+    min-height: 72px;
+    padding: 10px 14px;
+    font-size: 20px;
+    min-width: 0;
+  }
+
+  .task strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .task span {
-    font-size: 26px;
+    font-size: 30px;
   }
 
   h1 {
@@ -533,13 +566,14 @@ h3 {
   }
 
   .lede {
-    max-width: 100%;
+    max-width: calc(100vw - 40px);
     font-size: 18px;
   }
 
   .hero-actions,
   .button {
-    width: 100%;
+    width: calc(100vw - 40px);
+    max-width: calc(100vw - 40px);
   }
 
   .button {
@@ -552,5 +586,41 @@ h3 {
     max-width: 100vw;
     overflow: hidden;
     padding: 44px 20px;
+  }
+}
+
+@media (max-width: 360px) {
+  .routine-scene {
+    width: 100%;
+    height: 304px;
+  }
+
+  .portal-frame {
+    padding: 14px;
+  }
+
+  .portal-topbar {
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
+
+  .kid-column {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .kid-name {
+    font-size: 27px;
+  }
+
+  .task {
+    grid-template-columns: 44px minmax(0, 1fr);
+    min-height: 64px;
+    padding: 8px 12px;
+    font-size: 18px;
+  }
+
+  .task span {
+    font-size: 26px;
   }
 }
