@@ -23,6 +23,7 @@ html {
 
 body {
   margin: 0;
+  overflow-x: hidden;
   background: var(--paper);
   color: var(--ink);
   font-family: Avenir Next, Avenir, Trebuchet MS, sans-serif;
@@ -101,6 +102,7 @@ nav a:hover {
 .routine-scene {
   position: absolute;
   inset: 82px 18px auto auto;
+  min-width: 0;
   width: min(760px, 64vw);
   height: 560px;
   transform: rotate(-4deg);
@@ -109,6 +111,7 @@ nav a:hover {
 
 .portal-frame {
   height: 100%;
+  overflow: hidden;
   padding: 26px;
   background: #102c32;
   border: 12px solid #0b2024;
@@ -172,6 +175,11 @@ nav a:hover {
   text-align: center;
 }
 
+.task strong {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
 .task.done {
   background: var(--teal);
   border-color: var(--teal);
@@ -190,6 +198,7 @@ nav a:hover {
 
 .hero-copy {
   max-width: 650px;
+  min-width: 0;
   margin-left: max(28px, calc((100vw - 1120px) / 2));
 }
 
@@ -370,6 +379,46 @@ h3 {
   font-weight: 800;
 }
 
+@media (max-width: 1280px) {
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 620px) minmax(420px, 650px);
+    gap: 36px;
+    justify-content: center;
+    align-items: center;
+    min-height: 620px;
+    padding: 122px 28px 58px;
+    background:
+      radial-gradient(circle at 82% 12%, rgba(243, 199, 79, 0.16), transparent 32%),
+      var(--paper);
+  }
+
+  .routine-scene {
+    position: relative;
+    inset: auto;
+    z-index: 1;
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    height: 430px;
+    transform: rotate(-3deg);
+  }
+
+  .hero-copy {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+
+  h1 {
+    font-size: 66px;
+  }
+
+  .lede {
+    font-size: 20px;
+  }
+}
+
 @media (max-width: 920px) {
   .site-header {
     align-items: flex-start;
@@ -378,21 +427,27 @@ h3 {
   }
 
   .hero {
-    min-height: 780px;
-    padding-top: 146px;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+    padding: 136px 28px 52px;
     background:
-      linear-gradient(180deg, rgba(246, 244, 238, 0.98), rgba(246, 244, 238, 0.88) 56%, rgba(246, 244, 238, 0.48)),
+      radial-gradient(circle at 78% 48%, rgba(243, 199, 79, 0.14), transparent 34%),
       var(--paper);
   }
 
   .routine-scene {
-    inset: auto -90px 28px auto;
-    width: 720px;
-    height: 420px;
-    opacity: 0.72;
+    grid-column: 1;
+    grid-row: 2;
+    width: min(100%, 700px);
+    height: 390px;
+    margin: 28px auto 0;
+    opacity: 1;
+    transform: rotate(-2deg);
   }
 
   .hero-copy {
+    grid-column: 1;
+    grid-row: 1;
     margin: 0 auto;
   }
 
@@ -421,16 +476,23 @@ h3 {
   }
 
   .hero {
-    min-height: 720px;
+    min-height: auto;
     padding: 42px 20px 46px;
+    max-width: 100vw;
   }
 
   .routine-scene {
-    right: -160px;
-    bottom: 8px;
-    width: 640px;
-    height: 360px;
-    opacity: 0.46;
+    width: 100%;
+    max-width: 520px;
+    height: 300px;
+    margin: 26px auto 0;
+    opacity: 1;
+    transform: rotate(-1deg);
+  }
+
+  .hero-copy {
+    max-width: 100%;
+    min-width: 0;
   }
 
   .portal-frame {
@@ -457,10 +519,21 @@ h3 {
   }
 
   h1 {
-    font-size: 46px;
+    font-size: 44px;
+  }
+
+  .eyebrow {
+    font-size: 13px;
+    overflow-wrap: break-word;
+  }
+
+  h2 {
+    font-size: 31px;
+    overflow-wrap: break-word;
   }
 
   .lede {
+    max-width: 100%;
     font-size: 18px;
   }
 
@@ -476,6 +549,8 @@ h3 {
   .download-panel,
   .plain-section,
   .note-section {
+    max-width: 100vw;
+    overflow: hidden;
     padding: 44px 20px;
   }
 }
