@@ -4,6 +4,7 @@ import android.content.Context
 import com.davidedicillo.portalroutine.core.RoutineTask
 import com.davidedicillo.portalroutine.core.RoutineWindowConfig
 import com.davidedicillo.portalroutine.data.ChildConfig
+import com.davidedicillo.portalroutine.data.RewardConfig
 import com.davidedicillo.portalroutine.data.RoutineRepository
 import com.davidedicillo.portalroutine.data.StoreJson
 import fi.iki.elonen.NanoHTTPD
@@ -33,7 +34,11 @@ class RoutineAdminServer(
                 session.uri == "/api/windows" && session.method == Method.POST -> authenticated(session) { updateWindow(session) }
                 session.uri == "/api/windows/delete" && session.method == Method.POST -> authenticated(session) { deleteWindow(session) }
                 session.uri == "/api/tasks" && session.method == Method.POST -> authenticated(session) { upsertTask(session) }
+                session.uri == "/api/tasks/reorder" && session.method == Method.POST -> authenticated(session) { reorderTasks(session) }
                 session.uri == "/api/tasks/delete" && session.method == Method.POST -> authenticated(session) { deleteTask(session) }
+                session.uri == "/api/rewards" && session.method == Method.POST -> authenticated(session) { upsertReward(session) }
+                session.uri == "/api/rewards/delete" && session.method == Method.POST -> authenticated(session) { deleteReward(session) }
+                session.uri == "/api/wallet/deduct" && session.method == Method.POST -> authenticated(session) { deductPoints(session) }
                 session.uri == "/api/reset" && session.method == Method.POST -> authenticated(session) { resetDay() }
                 session.uri == "/api/settings/reset-time" && session.method == Method.POST -> authenticated(session) { updateResetTime(session) }
                 else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
@@ -75,8 +80,8 @@ class RoutineAdminServer(
     }
 
     private fun state(): Response = runBlocking {
-        val snapshot = repository.snapshot()
         val board = repository.boardState(LocalDateTime.now())
+        val snapshot = repository.snapshot()
         val adminUrl = "http://${NetworkAddress.localIpv4Address() ?: "127.0.0.1"}:8080"
         jsonResponse(StoreJson.stateJson(snapshot, board, adminUrl))
     }
@@ -119,24 +124,74 @@ class RoutineAdminServer(
 
     private fun upsertTask(session: IHTTPSession): Response = runBlocking {
         val params = formParams(session)
-        repository.upsertTask(
-            RoutineTask(
-                id = params["id"].orEmpty().ifBlank { UUID.randomUUID().toString() },
-                childId = required(params, "childId"),
-                windowId = required(params, "windowId"),
-                title = required(params, "title"),
-                enabled = params["enabled"] != "false",
-                sortOrder = params["sortOrder"]?.toIntOrNull() ?: 0,
-                note = params["note"]?.ifBlank { null },
-                visualCue = params["visualCue"].orEmpty().ifBlank { "⭐" },
-                activeDays = activeDays(session),
-            ),
+        val taskId = params["id"].orEmpty()
+        val childIds = if (taskId.isBlank()) childIds(session) else listOf(required(params, "childId"))
+        childIds.forEach { childId ->
+            repository.upsertTask(
+                RoutineTask(
+                    id = taskId.ifBlank { UUID.randomUUID().toString() },
+                    childId = childId,
+                    windowId = required(params, "windowId"),
+                    title = required(params, "title"),
+                    enabled = params["enabled"] != "false",
+                    sortOrder = params["sortOrder"]?.toIntOrNull() ?: 0,
+                    note = params["note"]?.ifBlank { null },
+                    visualCue = params["visualCue"].orEmpty().ifBlank { "⭐" },
+                    activeDays = activeDays(session),
+                    pointValue = params["pointValue"]?.toIntOrNull()?.takeIf { it >= 0 } ?: 1,
+                    repeatable = params["repeatable"] == "true",
+                ),
+            )
+        }
+        state()
+    }
+
+    private fun reorderTasks(session: IHTTPSession): Response = runBlocking {
+        val params = formParams(session)
+        repository.reorderTasks(
+            childId = required(params, "childId"),
+            windowId = required(params, "windowId"),
+            taskIds = required(params, "taskIds")
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotBlank() },
         )
         state()
     }
 
     private fun deleteTask(session: IHTTPSession): Response = runBlocking {
         repository.deleteTask(required(formParams(session), "id"))
+        state()
+    }
+
+    private fun upsertReward(session: IHTTPSession): Response = runBlocking {
+        val params = formParams(session)
+        repository.updateReward(
+            RewardConfig(
+                id = params["id"].orEmpty().ifBlank { UUID.randomUUID().toString() },
+                title = required(params, "title"),
+                pointCost = params["pointCost"]?.toIntOrNull()?.takeIf { it >= 0 } ?: error("pointCost must be zero or greater"),
+                enabled = params["enabled"] != "false",
+                sortOrder = params["sortOrder"]?.toIntOrNull() ?: 0,
+                note = params["note"]?.ifBlank { null },
+            ),
+        )
+        state()
+    }
+
+    private fun deleteReward(session: IHTTPSession): Response = runBlocking {
+        repository.deleteReward(required(formParams(session), "id"))
+        state()
+    }
+
+    private fun deductPoints(session: IHTTPSession): Response = runBlocking {
+        val params = formParams(session)
+        repository.deductPoints(
+            childId = required(params, "childId"),
+            amount = params["amount"]?.toIntOrNull()?.takeIf { it >= 0 } ?: error("amount must be zero or greater"),
+            reason = params["reason"].orEmpty().ifBlank { "Parent deduction" },
+            now = LocalDateTime.now(),
+        )
         state()
     }
 
@@ -160,6 +215,15 @@ class RoutineAdminServer(
 
     private fun queryParam(session: IHTTPSession, name: String): String? {
         return session.parameters[name]?.firstOrNull()
+    }
+
+    private fun childIds(session: IHTTPSession): List<String> {
+        val ids = session.parameters["childId"].orEmpty()
+            .flatMap { it.split(",") }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        return ids.ifEmpty { error("Missing childId") }
     }
 
     private fun activeDays(session: IHTTPSession): Set<DayOfWeek> {

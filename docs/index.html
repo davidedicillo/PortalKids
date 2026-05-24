@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PortalKids</title>
-    <meta name="description" content="A simple routine board for Meta Portal devices, with a Mac installer for non-technical families.">
+    <meta name="description" content="A routine board for Meta Portal devices with persistent kid point wallets, rewards, and a Mac installer for non-technical families.">
     <meta property="og:title" content="PortalKids">
-    <meta property="og:description" content="A small open-source routine board for Meta Portal devices.">
+    <meta property="og:description" content="A small open-source routine board for Meta Portal devices with kid point wallets and rewards.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://davidedicillo.github.io/PortalKids/">
     <link rel="stylesheet" href="styles.css">
@@ -34,15 +34,17 @@
             <div class="kid-board">
               <div class="kid-column kid-a">
                 <div class="kid-name">Kid A</div>
-                <div class="task done"><span>🪥</span><strong>Brush teeth</strong></div>
-                <div class="task done"><span>👕</span><strong>Get dressed</strong></div>
-                <div class="task"><span>🎒</span><strong>Pack backpack</strong></div>
+                <div class="wallet-pill"><span>18</span><strong>points</strong></div>
+                <div class="task done"><span>😁</span><strong>Brush teeth</strong><small>+1</small></div>
+                <div class="task done"><span>👕</span><strong>Get dressed</strong><small>+1</small></div>
+                <div class="task"><span>🎒</span><strong>Pack backpack</strong><small>+2</small></div>
               </div>
               <div class="kid-column kid-b">
                 <div class="kid-name">Kid B</div>
-                <div class="task done"><span>🍎</span><strong>Snack</strong></div>
-                <div class="task"><span>👟</span><strong>Shoes</strong></div>
-                <div class="task"><span>📚</span><strong>Books</strong></div>
+                <div class="wallet-pill"><span>9</span><strong>points</strong></div>
+                <div class="task done"><span>🍎</span><strong>Snack</strong><small>+1</small></div>
+                <div class="task"><span>👟</span><strong>Shoes</strong><small>+1</small></div>
+                <div class="task repeat"><span>📚</span><strong>Books</strong><small>- 2 +</small></div>
               </div>
             </div>
           </div>
@@ -52,7 +54,7 @@
           <p class="eyebrow">Open-source routine board for Meta Portal</p>
           <h1 id="hero-title">PortalKids</h1>
           <p class="lede">
-            I built this for our kitchen Portal so my kids can see routines, tap off tasks, and use icons before they can read everything.
+            I built this for our kitchen Portal so my kids can see routines, tap off tasks, earn points, and trade them for parent-approved prizes.
             A few parents asked for it, so this is the simplest installer path I have so far.
           </p>
           <div class="hero-actions" aria-label="Download and source links">
@@ -101,11 +103,15 @@
         <div class="feature-grid">
           <article>
             <h3>Kid-facing board</h3>
-            <p>Large task tiles, visual cues, two-child layout, and simple tap-to-complete behavior.</p>
+            <p>Large task tiles, visual cues, two-child layout, point counters, and simple tap-to-complete behavior.</p>
           </article>
           <article>
             <h3>Parent admin</h3>
-            <p>Edit children, routine windows, tasks, icons, colors, and reset times from a local web page.</p>
+            <p>Edit children, routine windows, draggable task order, icons, colors, and reset times from a local web page.</p>
+          </article>
+          <article>
+            <h3>Wallets and rewards</h3>
+            <p>Points accumulate in child wallets, and kids can redeem shared real-world rewards priced by a parent.</p>
           </article>
           <article>
             <h3>Standalone first</h3>

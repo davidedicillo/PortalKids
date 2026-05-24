@@ -1,6 +1,7 @@
 package com.davidedicillo.portalroutine.sync
 
 import com.davidedicillo.portalroutine.data.CompletionMutation
+import com.davidedicillo.portalroutine.data.RewardRedemptionMutation
 import com.davidedicillo.portalroutine.data.StoreJson
 import com.davidedicillo.portalroutine.data.StoreSnapshot
 import kotlinx.coroutines.Dispatchers
@@ -30,11 +31,26 @@ class PortalHubClient(
                     "taskId" to mutation.taskId,
                     "routineDate" to mutation.routineDate.toString(),
                     "completed" to mutation.completed.toString(),
+                    "count" to mutation.count.toString(),
                     "changedAt" to mutation.changedAt.toString(),
                     "deviceId" to deviceId,
                 ),
             )
         }
+    }
+
+    suspend fun redeemReward(mutation: RewardRedemptionMutation): Boolean = withContext(Dispatchers.IO) {
+        request(
+            method = "POST",
+            path = "/api/rewards/redeem",
+            form = mapOf(
+                "operationId" to mutation.operationId,
+                "childId" to mutation.childId,
+                "rewardId" to mutation.rewardId,
+                "createdAt" to mutation.createdAt.toString(),
+                "deviceId" to deviceId,
+            ),
+        ).optBoolean("applied", false)
     }
 
     suspend fun login(pin: String): String = withContext(Dispatchers.IO) {

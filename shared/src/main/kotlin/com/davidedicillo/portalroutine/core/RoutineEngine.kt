@@ -27,6 +27,8 @@ data class RoutineTask(
     val note: String? = null,
     val visualCue: String = "",
     val activeDays: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
+    val pointValue: Int = 1,
+    val repeatable: Boolean = false,
 ) {
     fun isActiveOn(date: LocalDate): Boolean {
         return activeDays.isEmpty() || date.dayOfWeek in activeDays

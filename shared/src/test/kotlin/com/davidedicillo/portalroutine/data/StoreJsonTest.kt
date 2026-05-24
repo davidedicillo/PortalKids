@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -85,5 +86,48 @@ class StoreJsonTest {
         val restored = StoreJson.snapshotFromState(json)
 
         assertEquals(DayOfWeek.entries.toSet(), restored.tasks.single().activeDays)
+    }
+
+    @Test
+    fun snapshotJsonRoundTripsWalletRewardsTaskPointsAndCompletionCount() {
+        val snapshot = StoreSnapshot(
+            children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+            windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+            tasks = listOf(
+                RoutineTask(
+                    id = "reading",
+                    childId = "child-a",
+                    windowId = "morning",
+                    title = "Reading",
+                    enabled = true,
+                    sortOrder = 0,
+                    pointValue = 2,
+                    repeatable = true,
+                ),
+            ),
+            completions = listOf(
+                DailyCompletion(LocalDate.of(2026, 5, 13), "reading", true, LocalDateTime.of(2026, 5, 13, 7, 0), null, count = 3),
+            ),
+            rewards = listOf(RewardConfig("reward-a", "Movie night", pointCost = 5, enabled = true, sortOrder = 0, note = "Friday")),
+            walletEntries = listOf(
+                WalletEntry(
+                    id = "entry-a",
+                    childId = "child-a",
+                    amount = 6,
+                    kind = WalletEntryKind.Earning,
+                    reason = "Reading",
+                    createdAt = LocalDateTime.of(2026, 5, 13, 7, 0),
+                    sourceId = "2026-05-13:reading",
+                ),
+            ),
+        )
+
+        val restored = StoreJson.snapshotFromState(StoreJson.snapshotJson(snapshot))
+
+        assertEquals(2, restored.tasks.single().pointValue)
+        assertTrue(restored.tasks.single().repeatable)
+        assertEquals(3, restored.completions.single().count)
+        assertEquals("Movie night", restored.rewards.single().title)
+        assertEquals(WalletEntryKind.Earning, restored.walletEntries.single().kind)
     }
 }

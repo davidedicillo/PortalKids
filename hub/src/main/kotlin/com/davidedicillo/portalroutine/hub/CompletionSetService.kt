@@ -17,9 +17,9 @@ class CompletionSetService(
                 return@withLock false
             }
 
-        repository.setTaskCompletion(
+        repository.setTaskCompletionCount(
             taskId = mutation.taskId,
-            completed = mutation.completed,
+            count = mutation.count,
             now = mutation.changedAt,
             routineDate = mutation.routineDate,
         )

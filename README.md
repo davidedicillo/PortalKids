@@ -6,6 +6,14 @@ Website: <https://davidedicillo.github.io/PortalKids/>
 
 Latest Mac installer: <https://github.com/davidedicillo/PortalKids/releases/latest/download/PortalKids-Installer-Mac.zip>
 
+## What It Does
+
+- Shows a kid-friendly routine board with large task tiles, icons, progress, and point totals.
+- Tracks points in persistent child wallets instead of resetting them at the end of the week.
+- Lets kids redeem parent-configured real-world rewards from the Portal.
+- Supports task point values and repeatable tasks, such as reading three 20-minute blocks.
+- Gives parents a PIN-protected admin page for children, routine windows, draggable task ordering, rewards, deductions, and reset settings.
+
 ## Easiest Install Path
 
 1. Download `PortalKids Installer for Mac`.
@@ -26,6 +34,8 @@ The Portal app works standalone by default. If you have an always-on Mac, the in
 Use the **Also run PortalKids Hub on this Mac** option in the installer only if that Mac is expected to stay on.
 
 Hub installation copies the bundled hub and Java runtime into `~/.portalkids/runtime`, stores data in `~/.portalkids/portal-kids.db`, and starts a LaunchAgent named `com.davidedicillo.portalkids.hub`.
+
+When a Portal is connected to the hub, task completions, repeat counts, wallet reward redemptions, rewards, and deductions reconcile through the hub's local API.
 
 ## Developer Build
 

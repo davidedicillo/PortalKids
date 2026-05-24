@@ -150,6 +150,34 @@ nav a:hover {
   font-weight: 900;
 }
 
+.wallet-pill {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  align-items: center;
+  min-height: 54px;
+  padding: 8px 12px;
+  border: 2px solid #b98712;
+  border-radius: 8px;
+  background: #fff0b8;
+  color: #5a3900;
+}
+
+.wallet-pill span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--yellow);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.wallet-pill strong {
+  font-size: 16px;
+  text-transform: uppercase;
+}
+
 .kid-a .kid-name {
   color: var(--teal);
 }
@@ -160,7 +188,7 @@ nav a:hover {
 
 .task {
   display: grid;
-  grid-template-columns: 58px 1fr;
+  grid-template-columns: 58px 1fr auto;
   align-items: center;
   min-height: 86px;
   padding: 10px 14px;
@@ -181,10 +209,32 @@ nav a:hover {
   word-break: normal;
 }
 
+.task small {
+  min-width: 42px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: #fff4c9;
+  color: #5a3900;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+}
+
 .task.done {
   background: var(--teal);
   border-color: var(--teal);
   color: white;
+}
+
+.task.done small {
+  background: rgba(255, 255, 255, 0.24);
+  color: white;
+}
+
+.task.repeat small {
+  min-width: 70px;
+  background: #e8f5ef;
+  color: var(--deep-teal);
 }
 
 .hero-copy,
@@ -349,7 +399,7 @@ h3 {
 
 .feature-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -567,7 +617,7 @@ h3 {
   }
 
   .task {
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: 52px minmax(0, 1fr) auto;
     min-height: 72px;
     padding: 10px 14px;
     font-size: 20px;
@@ -583,6 +633,12 @@ h3 {
 
   .task span {
     font-size: 30px;
+  }
+
+  .task small {
+    min-width: 36px;
+    padding: 4px 7px;
+    font-size: 13px;
   }
 
   h1 {
@@ -648,7 +704,7 @@ h3 {
   }
 
   .task {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     min-height: 64px;
     padding: 8px 12px;
     font-size: 18px;

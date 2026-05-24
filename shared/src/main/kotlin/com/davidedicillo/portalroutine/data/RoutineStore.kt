@@ -10,4 +10,7 @@ interface RoutineStore {
     suspend fun upsertCompletion(completion: DailyCompletion)
     suspend fun completion(localDate: LocalDate, taskId: String): DailyCompletion?
     suspend fun resetDate(localDate: LocalDate, clearedAt: LocalDateTime)
+    suspend fun upsertWalletEntry(entry: WalletEntry)
+    suspend fun deleteWalletEntry(id: String)
+    suspend fun walletEntry(id: String): WalletEntry?
 }

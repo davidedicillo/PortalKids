@@ -15,6 +15,8 @@ class InMemoryRoutineStore(initialSnapshot: StoreSnapshot = StoreSnapshot()) : R
             windows = current.windows.toList(),
             tasks = current.tasks.toList(),
             completions = current.completions.toList(),
+            rewards = current.rewards.toList(),
+            walletEntries = current.walletEntries.toList(),
         )
     }
 
@@ -25,6 +27,8 @@ class InMemoryRoutineStore(initialSnapshot: StoreSnapshot = StoreSnapshot()) : R
                 windows = snapshot.windows.sortedBy { it.sortOrder },
                 tasks = snapshot.tasks.sortedWith(compareBy({ it.childId }, { it.windowId }, { it.sortOrder })),
                 completions = snapshot.completions.sortedWith(compareBy({ it.localDate }, { it.taskId })),
+                rewards = snapshot.rewards.sortedWith(compareBy({ it.sortOrder }, { it.title }, { it.id })),
+                walletEntries = snapshot.walletEntries.sortedWith(compareBy({ it.createdAt }, { it.id })),
             )
         }
     }
@@ -55,12 +59,33 @@ class InMemoryRoutineStore(initialSnapshot: StoreSnapshot = StoreSnapshot()) : R
             current = current.copy(
                 completions = current.completions.map { completion ->
                     if (completion.localDate == localDate && completion.completed) {
-                        completion.copy(completed = false, clearedAt = clearedAt)
+                        completion.copy(completed = false, clearedAt = clearedAt, count = 0)
                     } else {
                         completion
                     }
                 },
             )
         }
+    }
+
+    override suspend fun upsertWalletEntry(entry: WalletEntry) {
+        mutex.withLock {
+            current = current.copy(
+                walletEntries = current.walletEntries
+                    .filterNot { it.id == entry.id }
+                    .plus(entry)
+                    .sortedWith(compareBy({ it.createdAt }, { it.id })),
+            )
+        }
+    }
+
+    override suspend fun deleteWalletEntry(id: String) {
+        mutex.withLock {
+            current = current.copy(walletEntries = current.walletEntries.filterNot { it.id == id })
+        }
+    }
+
+    override suspend fun walletEntry(id: String): WalletEntry? = mutex.withLock {
+        current.walletEntries.firstOrNull { it.id == id }
     }
 }

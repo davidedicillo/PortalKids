@@ -6,9 +6,12 @@ import com.davidedicillo.portalroutine.core.RoutineWindowConfig
 import com.davidedicillo.portalroutine.data.ChildConfig
 import com.davidedicillo.portalroutine.data.CompletionMutation
 import com.davidedicillo.portalroutine.data.DailyCompletion
+import com.davidedicillo.portalroutine.data.RewardConfig
 import com.davidedicillo.portalroutine.data.RoutineSettings
 import com.davidedicillo.portalroutine.data.RoutineStore
 import com.davidedicillo.portalroutine.data.StoreSnapshot
+import com.davidedicillo.portalroutine.data.WalletEntry
+import com.davidedicillo.portalroutine.data.WalletEntryKind
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
@@ -47,7 +50,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         sortOrder = getInt("sortOrder"),
                     )
                 },
-                tasks = connection.query("SELECT id, childId, windowId, title, visualCue, note, enabled, sortOrder, activeDays FROM routine_tasks ORDER BY childId, windowId, sortOrder") {
+                tasks = connection.query("SELECT id, childId, windowId, title, visualCue, note, enabled, sortOrder, activeDays, pointValue, repeatable FROM routine_tasks ORDER BY childId, windowId, sortOrder") {
                     RoutineTask(
                         id = getString("id"),
                         childId = getString("childId"),
@@ -58,18 +61,42 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         enabled = getInt("enabled") == 1,
                         sortOrder = getInt("sortOrder"),
                         activeDays = getString("activeDays").toActiveDays(),
+                        pointValue = getInt("pointValue"),
+                        repeatable = getInt("repeatable") == 1,
                     )
                 },
-                completions = connection.query("SELECT localDate, taskId, completed, completedAt, clearedAt FROM daily_completions ORDER BY localDate DESC, taskId") {
+                completions = connection.query("SELECT localDate, taskId, completed, completedAt, clearedAt, count FROM daily_completions ORDER BY localDate DESC, taskId") {
                     DailyCompletion(
                         localDate = LocalDate.parse(getString("localDate")),
                         taskId = getString("taskId"),
                         completed = getInt("completed") == 1,
                         completedAt = getString("completedAt")?.let(LocalDateTime::parse),
                         clearedAt = getString("clearedAt")?.let(LocalDateTime::parse),
+                        count = getInt("count"),
                     )
                 },
-                settings = connection.queryOne("SELECT parentPinHash, dailyResetTime, adminServerEnabled, overrideWindowId, overrideSetAt FROM settings WHERE id = 0") {
+                rewards = connection.query("SELECT id, title, pointCost, enabled, sortOrder, note FROM rewards ORDER BY sortOrder, title, id") {
+                    RewardConfig(
+                        id = getString("id"),
+                        title = getString("title"),
+                        pointCost = getInt("pointCost"),
+                        enabled = getInt("enabled") == 1,
+                        sortOrder = getInt("sortOrder"),
+                        note = getString("note"),
+                    )
+                },
+                walletEntries = connection.query("SELECT id, childId, amount, kind, reason, createdAt, sourceId FROM wallet_entries ORDER BY createdAt, id") {
+                    WalletEntry(
+                        id = getString("id"),
+                        childId = getString("childId"),
+                        amount = getInt("amount"),
+                        kind = getString("kind").toWalletEntryKind(),
+                        reason = getString("reason"),
+                        createdAt = LocalDateTime.parse(getString("createdAt")),
+                        sourceId = getString("sourceId"),
+                    )
+                },
+                settings = connection.queryOne("SELECT parentPinHash, dailyResetTime, adminServerEnabled, overrideWindowId, overrideSetAt, walletInitializedAt FROM settings WHERE id = 0") {
                     RoutineSettings(
                         parentPinHash = getString("parentPinHash"),
                         dailyResetTime = LocalTime.parse(getString("dailyResetTime")),
@@ -79,6 +106,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         } else {
                             null
                         },
+                        walletInitializedAt = getString("walletInitializedAt")?.let(LocalDateTime::parse),
                     )
                 } ?: RoutineSettings.Default,
             )
@@ -94,11 +122,15 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         statement.executeUpdate("DELETE FROM routine_windows")
                         statement.executeUpdate("DELETE FROM routine_tasks")
                         statement.executeUpdate("DELETE FROM daily_completions")
+                        statement.executeUpdate("DELETE FROM rewards")
+                        statement.executeUpdate("DELETE FROM wallet_entries")
                     }
                     upsertChildren(snapshot.children)
                     upsertWindows(snapshot.windows)
                     upsertTasks(snapshot.tasks)
                     upsertCompletions(snapshot.completions)
+                    upsertRewards(snapshot.rewards)
+                    upsertWalletEntries(snapshot.walletEntries)
                     upsertSettings(snapshot.settings)
                 }
             }
@@ -120,7 +152,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
     override suspend fun completion(localDate: LocalDate, taskId: String): DailyCompletion? = synchronized(lock) {
         connect { connection ->
             connection.prepareStatement(
-                "SELECT localDate, taskId, completed, completedAt, clearedAt FROM daily_completions WHERE localDate = ? AND taskId = ?",
+                    "SELECT localDate, taskId, completed, completedAt, clearedAt, count FROM daily_completions WHERE localDate = ? AND taskId = ?",
             ).use { statement ->
                 statement.setString(1, localDate.toString())
                 statement.setString(2, taskId)
@@ -132,6 +164,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                         completed = result.getInt("completed") == 1,
                         completedAt = result.getString("completedAt")?.let(LocalDateTime::parse),
                         clearedAt = result.getString("clearedAt")?.let(LocalDateTime::parse),
+                        count = result.getInt("count"),
                     )
                 }
             }
@@ -142,11 +175,50 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
         synchronized(lock) {
             connect { connection ->
                 connection.prepareStatement(
-                    "UPDATE daily_completions SET completed = 0, clearedAt = ? WHERE localDate = ? AND completed = 1",
+                    "UPDATE daily_completions SET completed = 0, count = 0, clearedAt = ? WHERE localDate = ? AND completed = 1",
                 ).use { statement ->
                     statement.setString(1, clearedAt.toString())
                     statement.setString(2, localDate.toString())
                     statement.executeUpdate()
+                }
+            }
+        }
+    }
+
+    override suspend fun upsertWalletEntry(entry: WalletEntry) {
+        synchronized(lock) {
+            connect { connection -> connection.upsertWalletEntries(listOf(entry)) }
+        }
+    }
+
+    override suspend fun deleteWalletEntry(id: String) {
+        synchronized(lock) {
+            connect { connection ->
+                connection.prepareStatement("DELETE FROM wallet_entries WHERE id = ?").use { statement ->
+                    statement.setString(1, id)
+                    statement.executeUpdate()
+                }
+            }
+        }
+    }
+
+    override suspend fun walletEntry(id: String): WalletEntry? = synchronized(lock) {
+        connect { connection ->
+            connection.prepareStatement(
+                "SELECT id, childId, amount, kind, reason, createdAt, sourceId FROM wallet_entries WHERE id = ?",
+            ).use { statement ->
+                statement.setString(1, id)
+                statement.executeQuery().use { result ->
+                    if (!result.next()) return@connect null
+                    WalletEntry(
+                        id = result.getString("id"),
+                        childId = result.getString("childId"),
+                        amount = result.getInt("amount"),
+                        kind = result.getString("kind").toWalletEntryKind(),
+                        reason = result.getString("reason"),
+                        createdAt = LocalDateTime.parse(result.getString("createdAt")),
+                        sourceId = result.getString("sourceId"),
+                    )
                 }
             }
         }
@@ -167,17 +239,18 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                 connection.prepareStatement(
                     """
                     INSERT OR REPLACE INTO processed_completion_operations
-                    (operationId, taskId, routineDate, completed, changedAt, deviceId, processedAt)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (operationId, taskId, routineDate, completed, count, changedAt, deviceId, processedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """.trimIndent(),
                 ).use { statement ->
                     statement.setString(1, mutation.operationId)
                     statement.setString(2, mutation.taskId)
                     statement.setString(3, mutation.routineDate.toString())
                     statement.setInt(4, if (mutation.completed) 1 else 0)
-                    statement.setString(5, mutation.changedAt.toString())
-                    statement.setString(6, mutation.deviceId)
-                    statement.setString(7, processedAt.toString())
+                    statement.setInt(5, mutation.count)
+                    statement.setString(6, mutation.changedAt.toString())
+                    statement.setString(7, mutation.deviceId)
+                    statement.setString(8, processedAt.toString())
                     statement.executeUpdate()
                 }
             }
@@ -219,7 +292,9 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                             note TEXT,
                             enabled INTEGER NOT NULL,
                             sortOrder INTEGER NOT NULL,
-                            activeDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'
+                            activeDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY',
+                            pointValue INTEGER NOT NULL DEFAULT 1,
+                            repeatable INTEGER NOT NULL DEFAULT 0
                         )
                         """.trimIndent(),
                     )
@@ -231,7 +306,33 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                             completed INTEGER NOT NULL,
                             completedAt TEXT,
                             clearedAt TEXT,
+                            count INTEGER NOT NULL DEFAULT 0,
                             PRIMARY KEY (localDate, taskId)
+                        )
+                        """.trimIndent(),
+                    )
+                    statement.executeUpdate(
+                        """
+                        CREATE TABLE IF NOT EXISTS rewards (
+                            id TEXT PRIMARY KEY,
+                            title TEXT NOT NULL,
+                            pointCost INTEGER NOT NULL,
+                            enabled INTEGER NOT NULL,
+                            sortOrder INTEGER NOT NULL,
+                            note TEXT
+                        )
+                        """.trimIndent(),
+                    )
+                    statement.executeUpdate(
+                        """
+                        CREATE TABLE IF NOT EXISTS wallet_entries (
+                            id TEXT PRIMARY KEY,
+                            childId TEXT NOT NULL,
+                            amount INTEGER NOT NULL,
+                            kind TEXT NOT NULL,
+                            reason TEXT NOT NULL,
+                            createdAt TEXT NOT NULL,
+                            sourceId TEXT
                         )
                         """.trimIndent(),
                     )
@@ -243,7 +344,8 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                             dailyResetTime TEXT NOT NULL,
                             adminServerEnabled INTEGER NOT NULL,
                             overrideWindowId TEXT,
-                            overrideSetAt TEXT
+                            overrideSetAt TEXT,
+                            walletInitializedAt TEXT
                         )
                         """.trimIndent(),
                     )
@@ -254,6 +356,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                             taskId TEXT NOT NULL,
                             routineDate TEXT NOT NULL,
                             completed INTEGER NOT NULL,
+                            count INTEGER NOT NULL DEFAULT 0,
                             changedAt TEXT NOT NULL,
                             deviceId TEXT NOT NULL,
                             processedAt TEXT NOT NULL
@@ -262,6 +365,36 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                     )
                 }
                 connection.ensureRoutineTaskActiveDaysColumn()
+                connection.ensureColumn(
+                    table = "routine_tasks",
+                    column = "pointValue",
+                    addSql = "ALTER TABLE routine_tasks ADD COLUMN pointValue INTEGER NOT NULL DEFAULT 1",
+                )
+                connection.ensureColumn(
+                    table = "routine_tasks",
+                    column = "repeatable",
+                    addSql = "ALTER TABLE routine_tasks ADD COLUMN repeatable INTEGER NOT NULL DEFAULT 0",
+                )
+                val addedCount = connection.ensureColumn(
+                    table = "daily_completions",
+                    column = "count",
+                    addSql = "ALTER TABLE daily_completions ADD COLUMN count INTEGER NOT NULL DEFAULT 0",
+                )
+                if (addedCount) {
+                    connection.createStatement().use { statement ->
+                        statement.executeUpdate("UPDATE daily_completions SET count = 1 WHERE completed = 1")
+                    }
+                }
+                connection.ensureColumn(
+                    table = "settings",
+                    column = "walletInitializedAt",
+                    addSql = "ALTER TABLE settings ADD COLUMN walletInitializedAt TEXT",
+                )
+                connection.ensureColumn(
+                    table = "processed_completion_operations",
+                    column = "count",
+                    addSql = "ALTER TABLE processed_completion_operations ADD COLUMN count INTEGER NOT NULL DEFAULT 0",
+                )
             }
         }
     }
@@ -300,8 +433,8 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
         prepareStatement(
             """
             INSERT OR REPLACE INTO routine_tasks
-            (id, childId, windowId, title, visualCue, note, enabled, sortOrder, activeDays)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, childId, windowId, title, visualCue, note, enabled, sortOrder, activeDays, pointValue, repeatable)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { statement ->
             tasks.forEach { task ->
@@ -314,6 +447,8 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                 statement.setInt(7, if (task.enabled) 1 else 0)
                 statement.setInt(8, task.sortOrder)
                 statement.setString(9, task.activeDays.toStorageValue())
+                statement.setInt(10, task.pointValue)
+                statement.setInt(11, if (task.repeatable) 1 else 0)
                 statement.addBatch()
             }
             statement.executeBatch()
@@ -324,8 +459,8 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
         prepareStatement(
             """
             INSERT OR REPLACE INTO daily_completions
-            (localDate, taskId, completed, completedAt, clearedAt)
-            VALUES (?, ?, ?, ?, ?)
+            (localDate, taskId, completed, completedAt, clearedAt, count)
+            VALUES (?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { statement ->
             completions.forEach { completion ->
@@ -334,6 +469,50 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
                 statement.setInt(3, if (completion.completed) 1 else 0)
                 statement.setString(4, completion.completedAt?.toString())
                 statement.setString(5, completion.clearedAt?.toString())
+                statement.setInt(6, completion.count)
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+    }
+
+    private fun Connection.upsertRewards(rewards: List<RewardConfig>) {
+        prepareStatement(
+            """
+            INSERT OR REPLACE INTO rewards
+            (id, title, pointCost, enabled, sortOrder, note)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+        ).use { statement ->
+            rewards.forEach { reward ->
+                statement.setString(1, reward.id)
+                statement.setString(2, reward.title)
+                statement.setInt(3, reward.pointCost)
+                statement.setInt(4, if (reward.enabled) 1 else 0)
+                statement.setInt(5, reward.sortOrder)
+                statement.setString(6, reward.note)
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+    }
+
+    private fun Connection.upsertWalletEntries(entries: List<WalletEntry>) {
+        prepareStatement(
+            """
+            INSERT OR REPLACE INTO wallet_entries
+            (id, childId, amount, kind, reason, createdAt, sourceId)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+        ).use { statement ->
+            entries.forEach { entry ->
+                statement.setString(1, entry.id)
+                statement.setString(2, entry.childId)
+                statement.setInt(3, entry.amount)
+                statement.setString(4, entry.kind.name)
+                statement.setString(5, entry.reason)
+                statement.setString(6, entry.createdAt.toString())
+                statement.setString(7, entry.sourceId)
                 statement.addBatch()
             }
             statement.executeBatch()
@@ -344,8 +523,8 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
         prepareStatement(
             """
             INSERT OR REPLACE INTO settings
-            (id, parentPinHash, dailyResetTime, adminServerEnabled, overrideWindowId, overrideSetAt)
-            VALUES (0, ?, ?, ?, ?, ?)
+            (id, parentPinHash, dailyResetTime, adminServerEnabled, overrideWindowId, overrideSetAt, walletInitializedAt)
+            VALUES (0, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         ).use { statement ->
             statement.setString(1, settings.parentPinHash)
@@ -353,6 +532,7 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
             statement.setInt(3, if (settings.adminServerEnabled) 1 else 0)
             statement.setString(4, settings.manualActiveWindowOverride?.windowId)
             statement.setString(5, settings.manualActiveWindowOverride?.setAt?.toString())
+            statement.setString(6, settings.walletInitializedAt?.toString())
             statement.executeUpdate()
         }
     }
@@ -398,11 +578,22 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
     }
 
     private fun Connection.ensureRoutineTaskActiveDaysColumn() {
+        ensureColumn(
+            table = "routine_tasks",
+            column = "activeDays",
+            addSql = """
+                ALTER TABLE routine_tasks
+                ADD COLUMN activeDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'
+            """.trimIndent(),
+        )
+    }
+
+    private fun Connection.ensureColumn(table: String, column: String, addSql: String): Boolean {
         val hasColumn = createStatement().use { statement ->
-            statement.executeQuery("PRAGMA table_info(routine_tasks)").use { result ->
+            statement.executeQuery("PRAGMA table_info($table)").use { result ->
                 var found = false
                 while (result.next()) {
-                    if (result.getString("name") == "activeDays") {
+                    if (result.getString("name") == column) {
                         found = true
                     }
                 }
@@ -411,14 +602,11 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
         }
         if (!hasColumn) {
             createStatement().use { statement ->
-                statement.executeUpdate(
-                    """
-                    ALTER TABLE routine_tasks
-                    ADD COLUMN activeDays TEXT NOT NULL DEFAULT 'MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY'
-                    """.trimIndent(),
-                )
+                statement.executeUpdate(addSql)
             }
+            return true
         }
+        return false
     }
 
     private fun String.toActiveDays(): Set<DayOfWeek> {
@@ -436,5 +624,10 @@ class SqliteRoutineStore(private val databaseFile: File) : RoutineStore {
         } else {
             sortedBy { it.value }.joinToString(",") { it.name }
         }
+    }
+
+    private fun String.toWalletEntryKind(): WalletEntryKind {
+        return WalletEntryKind.entries.firstOrNull { it.name.equals(this, ignoreCase = true) }
+            ?: WalletEntryKind.Earning
     }
 }

@@ -63,6 +63,13 @@
       min-height: auto;
       width: auto;
     }
+    select[multiple] {
+      min-height: 96px;
+      padding: 6px;
+    }
+    select[multiple] option {
+      padding: 5px 7px;
+    }
     button {
       border: 0;
       background: #1f8a70;
@@ -137,6 +144,10 @@
     }
     #resetTimeForm {
       grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr);
+    }
+    #rewardForm,
+    #deductForm {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
     table {
       width: 100%;
@@ -263,7 +274,7 @@
     }
     .task-row {
       display: grid;
-      grid-template-columns: 40px minmax(0, 1fr) auto;
+      grid-template-columns: 30px 40px minmax(0, 1fr) auto;
       gap: 10px;
       align-items: center;
       border: 1px solid #e5e2da;
@@ -272,9 +283,31 @@
       margin-bottom: 8px;
       background: #fffefa;
     }
+    .task-row.dragging {
+      opacity: .45;
+    }
+    .task-row.drag-over {
+      border-color: #1f8a70;
+      box-shadow: 0 0 0 3px rgba(31, 138, 112, .16);
+    }
     .task-row.disabled {
       opacity: .62;
       background: #f3f1eb;
+    }
+    .drag-handle {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 40px;
+      border-radius: 6px;
+      color: #5f6d74;
+      background: #f0f3ef;
+      cursor: grab;
+      font-weight: 900;
+      user-select: none;
+    }
+    .task-row:active .drag-handle {
+      cursor: grabbing;
     }
     .task-icon {
       display: grid;
@@ -367,6 +400,8 @@
       #windowForm,
       #taskForm,
       #resetTimeForm,
+      #rewardForm,
+      #deductForm,
       #loginForm {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -377,14 +412,18 @@
       #taskForm label,
       #taskForm button,
       #resetTimeForm label,
-      #resetTimeForm button {
+      #resetTimeForm button,
+      #rewardForm label,
+      #rewardForm button,
+      #deductForm label,
+      #deductForm button {
         grid-column: auto;
       }
       #taskForm .days-field {
         grid-column: 1 / -1;
       }
       .task-row {
-        grid-template-columns: 40px minmax(0, 1fr);
+        grid-template-columns: 30px 40px minmax(0, 1fr);
       }
       .task-row .actions {
         grid-column: 1 / -1;
@@ -396,6 +435,8 @@
       #windowForm,
       #taskForm,
       #resetTimeForm,
+      #rewardForm,
+      #deductForm,
       #loginForm {
         grid-template-columns: 1fr;
       }
@@ -454,13 +495,15 @@
         </div>
         <form id="taskForm">
           <label>ID <input name="id" placeholder="blank for new"></label>
-          <label>Child <select name="childId"></select></label>
+          <label>Kids <select name="childId" multiple size="3"></select></label>
           <label>Window <select name="windowId"></select></label>
           <label>Icon <input name="visualCue" maxlength="4" placeholder="😁"></label>
           <label>Title <input name="title" required></label>
           <label>Note <input name="note"></label>
           <label>Order <input name="sortOrder" type="number" value="0"></label>
           <label>Enabled <select name="enabled"><option value="true">Yes</option><option value="false">No</option></select></label>
+          <label>Points <input name="pointValue" type="number" min="0" value="1"></label>
+          <label>Repeatable <select name="repeatable"><option value="false">No</option><option value="true">Yes</option></select></label>
           <label class="days-field">Days <span id="activeDaysGroup" class="weekday-grid"></span></label>
           <button type="submit">Save Task</button>
           <button id="clearTaskForm" class="ghost" type="button">New Task</button>
@@ -485,12 +528,38 @@
       <section>
         <h2>Points</h2>
         <p id="pointsWeek" class="muted"></p>
+        <form id="deductForm">
+          <label>Child <select name="childId"></select></label>
+          <label>Amount <input name="amount" type="number" min="0" required></label>
+          <label>Reason <input name="reason" placeholder="Misbehaving"></label>
+          <button class="danger" type="submit">Deduct Points</button>
+        </form>
         <table id="pointsTable"></table>
       </section>
 
       <section>
-        <h2>Recent History</h2>
+        <h2>Rewards</h2>
+        <form id="rewardForm">
+          <label>ID <input name="id" placeholder="blank for new"></label>
+          <label>Title <input name="title" required></label>
+          <label>Cost <input name="pointCost" type="number" min="0" value="5" required></label>
+          <label>Order <input name="sortOrder" type="number" value="0"></label>
+          <label>Enabled <select name="enabled"><option value="true">Yes</option><option value="false">No</option></select></label>
+          <label>Note <input name="note"></label>
+          <button type="submit">Save Reward</button>
+          <button id="clearRewardForm" class="ghost" type="button">New Reward</button>
+        </form>
+        <table id="rewardsTable"></table>
+      </section>
+
+      <section>
+        <h2>Recent Task History</h2>
         <table id="historyTable"></table>
+      </section>
+
+      <section>
+        <h2>Recent Wallet Activity</h2>
+        <table id="walletHistoryTable"></table>
       </section>
     </div>
   </main>
@@ -499,6 +568,7 @@
     let state = null;
     let selectedChildId = localStorage.getItem("portalKidsSelectedChild") || "";
     let taskViewMode = localStorage.getItem("portalKidsTaskView") || "list";
+    let draggedTaskId = "";
 
     const dayOptions = [
       ["MONDAY", "Mon"],
@@ -573,7 +643,13 @@
 
     const optionList = (selectName, rows, labelKey) => {
       document.querySelectorAll(`select[name="${selectName}"]`).forEach(select => {
+        const selectedValues = new Set(Array.from(select.selectedOptions || []).map(option => option.value));
         select.innerHTML = rows.map(row => `<option value="${row.id}">${row[labelKey]}</option>`).join("");
+        if (selectedValues.size) {
+          Array.from(select.options).forEach(option => {
+            option.selected = selectedValues.has(option.value);
+          });
+        }
       });
     };
 
@@ -636,10 +712,29 @@
       .filter(task => task.childId === selectedChildId)
       .sort(compareTasks);
 
+    const taskChildSelect = () => document.querySelector("#taskForm select[name='childId']");
+
+    const setTaskChildSelectMode = isEditing => {
+      const select = taskChildSelect();
+      select.multiple = !isEditing;
+      select.size = isEditing ? 1 : Math.min(Math.max(state.children.length, 2), 5);
+    };
+
+    const setSelectedTaskChildren = childIds => {
+      const selected = new Set(childIds.filter(Boolean));
+      Array.from(taskChildSelect().options).forEach(option => {
+        option.selected = selected.has(option.value);
+      });
+    };
+
     const syncTaskFormToSelectedChild = () => {
       const form = document.getElementById("taskForm");
       if (selectedChildId) {
-        form.elements.namedItem("childId").value = selectedChildId;
+        const isEditing = !!form.elements.namedItem("id").value;
+        setTaskChildSelectMode(isEditing);
+        if (!isEditing) {
+          setSelectedTaskChildren([selectedChildId]);
+        }
       }
     };
 
@@ -649,7 +744,10 @@
       form.elements.namedItem("id").value = "";
       form.elements.namedItem("sortOrder").value = "0";
       form.elements.namedItem("enabled").value = "true";
-      if (selectedChildId) form.elements.namedItem("childId").value = selectedChildId;
+      form.elements.namedItem("pointValue").value = "1";
+      form.elements.namedItem("repeatable").value = "false";
+      setTaskChildSelectMode(false);
+      if (selectedChildId) setSelectedTaskChildren([selectedChildId]);
       renderDayControls();
     };
 
@@ -657,8 +755,18 @@
       selectedChildId = task.childId;
       localStorage.setItem("portalKidsSelectedChild", selectedChildId);
       render();
-      fillForm("taskForm", { ...task, enabled: String(task.enabled) });
+      setTaskChildSelectMode(true);
+      fillForm("taskForm", { ...task, enabled: String(task.enabled), repeatable: String(!!task.repeatable), pointValue: task.pointValue ?? 1 });
       setTaskFormDays(taskActiveDays(task));
+    };
+
+    const clearRewardForm = () => {
+      const form = document.getElementById("rewardForm");
+      form.reset();
+      form.elements.namedItem("id").value = "";
+      form.elements.namedItem("pointCost").value = "5";
+      form.elements.namedItem("sortOrder").value = "0";
+      form.elements.namedItem("enabled").value = "true";
     };
 
     const renderChildTabs = () => {
@@ -681,11 +789,12 @@
     };
 
     const taskRow = task => `
-      <div class="task-row ${task.enabled ? "" : "disabled"}">
+      <div class="task-row ${task.enabled ? "" : "disabled"}" draggable="true" data-task-id="${escapeHtml(task.id)}" data-window-id="${escapeHtml(task.windowId)}">
+        <div class="drag-handle" title="Drag to reorder" aria-hidden="true">↕</div>
         <div class="task-icon">${escapeHtml(task.visualCue || "⭐")}</div>
         <div class="task-main">
           <div class="task-title">${escapeHtml(task.title)}</div>
-          <div class="task-meta">${escapeHtml(activeDaysLabel(task))}${task.note ? ` · ${escapeHtml(task.note)}` : ""}</div>
+          <div class="task-meta">${escapeHtml(activeDaysLabel(task))} · ${task.pointValue ?? 1} pt${task.repeatable ? " each · repeatable" : ""}${task.note ? ` · ${escapeHtml(task.note)}` : ""}</div>
           <div class="task-day-pills">
             ${taskActiveDays(task).map(day => `<span class="day-pill">${dayOptions.find(option => option[0] === day)?.[1] || day}</span>`).join("")}
           </div>
@@ -735,6 +844,54 @@
       timeline.innerHTML = `<div class="week-grid">${header}${body}</div>`;
     };
 
+    const taskOrderForWindow = windowId => tasksForSelectedChild()
+      .filter(task => task.windowId === windowId)
+      .map(task => task.id);
+
+    const attachTaskDragHandlers = () => {
+      document.querySelectorAll("#tasksBoard .task-row[draggable='true']").forEach(row => {
+        row.ondragstart = event => {
+          draggedTaskId = row.dataset.taskId;
+          row.classList.add("dragging");
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", draggedTaskId);
+        };
+        row.ondragover = event => {
+          if (!draggedTaskId || draggedTaskId === row.dataset.taskId) return;
+          const draggedRow = Array.from(document.querySelectorAll(".task-row"))
+            .find(item => item.dataset.taskId === draggedTaskId);
+          if (!draggedRow || draggedRow.dataset.windowId !== row.dataset.windowId) return;
+          event.preventDefault();
+          row.classList.add("drag-over");
+        };
+        row.ondragleave = () => row.classList.remove("drag-over");
+        row.ondragend = () => {
+          row.classList.remove("dragging");
+          document.querySelectorAll(".task-row.drag-over").forEach(item => item.classList.remove("drag-over"));
+          draggedTaskId = "";
+        };
+        row.ondrop = async event => {
+          event.preventDefault();
+          row.classList.remove("drag-over");
+          const droppedTaskId = row.dataset.taskId;
+          const windowId = row.dataset.windowId;
+          if (!draggedTaskId || draggedTaskId === droppedTaskId) return;
+
+          const orderedIds = taskOrderForWindow(windowId);
+          const draggedIndex = orderedIds.indexOf(draggedTaskId);
+          const targetIndex = orderedIds.indexOf(droppedTaskId);
+          if (draggedIndex < 0 || targetIndex < 0) return;
+          orderedIds.splice(draggedIndex, 1);
+          orderedIds.splice(targetIndex, 0, draggedTaskId);
+          await postAndRender("/api/tasks/reorder", {
+            childId: selectedChildId,
+            windowId,
+            taskIds: orderedIds.join(",")
+          });
+        };
+      });
+    };
+
     const renderTasks = () => {
       ensureSelectedChild();
       const checkedDays = Array.from(document.querySelectorAll("#activeDaysGroup input[name='activeDays']:checked")).map(input => input.value);
@@ -749,6 +906,7 @@
       document.getElementById("taskCount").textContent = child ? `${child.displayName} schedule` : "";
       renderTaskList(rows);
       renderScheduleTimeline(rows);
+      attachTaskDragHandlers();
     };
 
     const render = () => {
@@ -769,11 +927,19 @@
       document.getElementById("pointsWeek").textContent =
         points.weekStart && points.weekEnd ? `Week ${points.weekStart} to ${points.weekEnd}` : "";
       renderTable("pointsTable", points.children || [], [
-        ["Child", r => r.displayName], ["Today", r => `${r.daily} pts`], ["Week", r => `${r.weekly} pts`]
+        ["Child", r => r.displayName], ["Wallet", r => `${r.wallet ?? 0} pts`], ["Today", r => `${r.daily} pts`], ["Week", r => `${r.weekly} pts`]
+      ]);
+      renderTable("rewardsTable", state.rewards || [], [
+        ["Reward", r => r.title], ["Cost", r => `${r.pointCost} pts`], ["Enabled", r => r.enabled ? "Yes" : "No"], ["Note", r => r.note || ""],
+        ["", r => `<span class="actions"><button data-edit-reward="${r.id}" class="secondary compact">Edit</button><button data-delete-reward="${r.id}" class="danger compact">Delete</button></span>`]
       ]);
       renderTable("historyTable", state.history, [
-        ["Date", r => r.localDate], ["Task", r => r.taskId], ["Done", r => r.completed ? "Yes" : "No"],
+        ["Date", r => r.localDate], ["Task", r => r.taskId], ["Done", r => r.completed ? "Yes" : "No"], ["Count", r => r.count ?? (r.completed ? 1 : 0)],
         ["Completed", r => r.completedAt], ["Cleared", r => r.clearedAt]
+      ]);
+      renderTable("walletHistoryTable", state.walletHistory || [], [
+        ["When", r => r.createdAt], ["Child", r => state.children.find(child => child.id === r.childId)?.displayName || r.childId],
+        ["Amount", r => `${r.amount} pts`], ["Kind", r => r.kind], ["Reason", r => r.reason || ""]
       ]);
       document.querySelectorAll("[data-edit-child]").forEach(button => {
         button.onclick = () => {
@@ -831,6 +997,18 @@
           await postAndRender("/api/tasks/delete", { id: button.dataset.deleteTask });
         };
       });
+      document.querySelectorAll("[data-edit-reward]").forEach(button => {
+        button.onclick = () => {
+          const reward = state.rewards.find(row => row.id === button.dataset.editReward);
+          if (reward) fillForm("rewardForm", { ...reward, enabled: String(reward.enabled) });
+        };
+      });
+      document.querySelectorAll("[data-delete-reward]").forEach(button => {
+        button.onclick = async () => {
+          if (!confirm("Delete this reward?")) return;
+          await postAndRender("/api/rewards/delete", { id: button.dataset.deleteReward });
+        };
+      });
     };
 
     const fillForm = (formId, values) => {
@@ -864,10 +1042,27 @@
     document.getElementById("windowForm").onsubmit = async event => { event.preventDefault(); await postAndRender("/api/windows", new FormData(event.target)); };
     document.getElementById("taskForm").onsubmit = async event => {
       event.preventDefault();
-      const saved = await postAndRender("/api/tasks", new FormData(event.target));
+      const formData = new FormData(event.target);
+      if (!formData.get("id") && formData.getAll("childId").length === 0) {
+        alert("Choose at least one kid.");
+        return;
+      }
+      const saved = await postAndRender("/api/tasks", formData);
       if (saved) clearTaskForm();
     };
     document.getElementById("clearTaskForm").onclick = clearTaskForm;
+    document.getElementById("rewardForm").onsubmit = async event => {
+      event.preventDefault();
+      const saved = await postAndRender("/api/rewards", new FormData(event.target));
+      if (saved) clearRewardForm();
+    };
+    document.getElementById("clearRewardForm").onclick = clearRewardForm;
+    document.getElementById("deductForm").onsubmit = async event => {
+      event.preventDefault();
+      if (!confirm("Deduct these points?")) return;
+      await postAndRender("/api/wallet/deduct", new FormData(event.target));
+      event.target.reset();
+    };
     document.getElementById("resetTimeForm").onsubmit = async event => { event.preventDefault(); await postAndRender("/api/settings/reset-time", new FormData(event.target)); };
     document.getElementById("resetDay").onclick = async () => { await postAndRender("/api/reset", {}); };
     if (token) load().catch(handleRequestError);

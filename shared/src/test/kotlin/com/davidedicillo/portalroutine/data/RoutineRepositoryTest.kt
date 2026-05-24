@@ -200,6 +200,43 @@ class RoutineRepositoryTest {
     }
 
     @Test
+    fun reorderTasksUpdatesSortOrderWithinChildWindowOnly() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(
+                    ChildConfig("child-a", "Kid A", "#1F8A70", 0),
+                    ChildConfig("child-b", "Kid B", "#D95F59", 1),
+                ),
+                windows = listOf(
+                    RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0),
+                    RoutineWindowConfig("evening", "Evening", LocalTime.of(18, 30), 1),
+                ),
+                tasks = listOf(
+                    RoutineTask("brush", "child-a", "morning", "Brush", enabled = true, sortOrder = 0),
+                    RoutineTask("bag", "child-a", "morning", "Bag", enabled = true, sortOrder = 1),
+                    RoutineTask("shoes", "child-a", "morning", "Shoes", enabled = true, sortOrder = 2),
+                    RoutineTask("books", "child-a", "evening", "Books", enabled = true, sortOrder = 0),
+                    RoutineTask("b-brush", "child-b", "morning", "Brush", enabled = true, sortOrder = 0),
+                ),
+            ),
+        )
+        val repository = RoutineRepository(store)
+
+        repository.reorderTasks("child-a", "morning", listOf("shoes", "brush", "bag"))
+
+        val snapshot = store.snapshot()
+        assertEquals(
+            listOf("shoes", "brush", "bag"),
+            snapshot.tasks
+                .filter { it.childId == "child-a" && it.windowId == "morning" }
+                .sortedBy { it.sortOrder }
+                .map { it.id },
+        )
+        assertEquals(0, snapshot.tasks.single { it.id == "books" }.sortOrder)
+        assertEquals(0, snapshot.tasks.single { it.id == "b-brush" }.sortOrder)
+    }
+
+    @Test
     fun boardStateIncludesDailyAndMondaySundayWeeklyPointsByChild() = runTest {
         val store = InMemoryRoutineStore(
             StoreSnapshot(
@@ -233,8 +270,116 @@ class RoutineRepositoryTest {
 
         assertEquals(LocalDate.of(2026, 5, 11), board.weekStart)
         assertEquals(LocalDate.of(2026, 5, 17), board.weekEnd)
-        assertEquals(PointTotals(daily = 1, weekly = 2), childA.points)
-        assertEquals(PointTotals(daily = 0, weekly = 1), childB.points)
+        assertEquals(PointTotals(daily = 1, weekly = 2, wallet = 2), childA.points)
+        assertEquals(PointTotals(daily = 0, weekly = 1, wallet = 1), childB.points)
+    }
+
+    @Test
+    fun walletInitializationSeedsCurrentWeekCompletionsOnly() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(
+                    RoutineTask("last-week", "child-a", "morning", "Last week", enabled = true, sortOrder = 0, pointValue = 5),
+                    RoutineTask("this-week", "child-a", "morning", "This week", enabled = true, sortOrder = 1, pointValue = 2),
+                ),
+                completions = listOf(
+                    DailyCompletion(LocalDate.of(2026, 5, 10), "last-week", true, LocalDateTime.of(2026, 5, 10, 7, 0), null),
+                    DailyCompletion(LocalDate.of(2026, 5, 11), "this-week", true, LocalDateTime.of(2026, 5, 11, 7, 0), null),
+                ),
+            ),
+        )
+        val repository = RoutineRepository(store)
+
+        val board = repository.boardState(LocalDateTime.of(2026, 5, 13, 8, 0))
+
+        assertEquals(2, board.children.single().points.wallet)
+        assertEquals(
+            listOf(2),
+            store.snapshot().walletEntries.map { it.amount },
+        )
+        assertNotNull(store.snapshot().settings.walletInitializedAt)
+    }
+
+    @Test
+    fun repeatableTaskCountUsesTaskPointValueForTotalsAndWallet() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(
+                    RoutineTask(
+                        id = "reading",
+                        childId = "child-a",
+                        windowId = "morning",
+                        title = "20 min reading",
+                        enabled = true,
+                        sortOrder = 0,
+                        pointValue = 2,
+                        repeatable = true,
+                    ),
+                ),
+            ),
+        )
+        val repository = RoutineRepository(store)
+        val now = LocalDateTime.of(2026, 5, 13, 8, 0)
+
+        repository.setTaskCompletionCount("reading", count = 3, now = now)
+        var board = repository.boardState(now)
+
+        assertEquals(PointTotals(daily = 6, weekly = 6, wallet = 6), board.children.single().points)
+        assertEquals(3, store.completion(LocalDate.of(2026, 5, 13), "reading")!!.count)
+
+        repository.setTaskCompletionCount("reading", count = 1, now = now.plusMinutes(5))
+        board = repository.boardState(now.plusMinutes(5))
+
+        assertEquals(PointTotals(daily = 2, weekly = 2, wallet = 2), board.children.single().points)
+        assertEquals(1, store.snapshot().walletEntries.count { it.kind == WalletEntryKind.Earning })
+    }
+
+    @Test
+    fun rewardRedemptionRequiresAffordableWalletAndRecordsSpend() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(RoutineTask("task-a", "child-a", "morning", "Task A", enabled = true, sortOrder = 0, pointValue = 4, repeatable = true)),
+                rewards = listOf(RewardConfig("reward-a", "Movie night", pointCost = 5, enabled = true, sortOrder = 0)),
+            ),
+        )
+        val repository = RoutineRepository(store)
+        val now = LocalDateTime.of(2026, 5, 13, 8, 0)
+
+        repository.setTaskCompletion("task-a", completed = true, now = now)
+        assertFalse(repository.redeemReward("child-a", "reward-a", now.plusMinutes(1), operationId = "too-expensive"))
+
+        repository.setTaskCompletionCount("task-a", count = 2, now = now.plusMinutes(2))
+        assertTrue(repository.redeemReward("child-a", "reward-a", now.plusMinutes(3), operationId = "redeem-1"))
+
+        val board = repository.boardState(now.plusMinutes(4))
+        assertEquals(3, board.children.single().points.wallet)
+        assertEquals(listOf(8, -5), store.snapshot().walletEntries.map { it.amount }.sortedDescending())
+    }
+
+    @Test
+    fun parentDeductionClampsWalletAtZero() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(RoutineTask("task-a", "child-a", "morning", "Task A", enabled = true, sortOrder = 0, pointValue = 3)),
+            ),
+        )
+        val repository = RoutineRepository(store)
+        val now = LocalDateTime.of(2026, 5, 13, 8, 0)
+
+        repository.setTaskCompletion("task-a", completed = true, now = now)
+        val deduction = repository.deductPoints("child-a", 10, "Misbehaving", now.plusMinutes(1))
+
+        assertEquals(3, deduction)
+        assertEquals(0, repository.boardState(now.plusMinutes(2)).children.single().points.wallet)
+        assertEquals(-3, store.snapshot().walletEntries.single { it.kind == WalletEntryKind.Deduction }.amount)
     }
 
     @Test
@@ -261,7 +406,7 @@ class RoutineRepositoryTest {
         assertEquals(LocalDate.of(2026, 5, 17), board.routineDate)
         assertEquals(LocalDate.of(2026, 5, 11), board.weekStart)
         assertEquals(LocalDate.of(2026, 5, 17), board.weekEnd)
-        assertEquals(PointTotals(daily = 1, weekly = 1), board.children.single().points)
+        assertEquals(PointTotals(daily = 1, weekly = 1, wallet = 1), board.children.single().points)
     }
 
     @Test

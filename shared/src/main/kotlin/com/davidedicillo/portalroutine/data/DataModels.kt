@@ -21,6 +21,7 @@ data class DailyCompletion(
     val completed: Boolean,
     val completedAt: LocalDateTime?,
     val clearedAt: LocalDateTime?,
+    val count: Int = if (completed) 1 else 0,
 )
 
 data class CompletionMutation(
@@ -30,6 +31,40 @@ data class CompletionMutation(
     val completed: Boolean,
     val changedAt: LocalDateTime,
     val deviceId: String,
+    val count: Int = if (completed) 1 else 0,
+)
+
+data class RewardRedemptionMutation(
+    val operationId: String,
+    val childId: String,
+    val rewardId: String,
+    val createdAt: LocalDateTime,
+    val deviceId: String,
+)
+
+data class RewardConfig(
+    val id: String,
+    val title: String,
+    val pointCost: Int,
+    val enabled: Boolean,
+    val sortOrder: Int,
+    val note: String? = null,
+)
+
+enum class WalletEntryKind {
+    Earning,
+    RewardRedemption,
+    Deduction,
+}
+
+data class WalletEntry(
+    val id: String,
+    val childId: String,
+    val amount: Int,
+    val kind: WalletEntryKind,
+    val reason: String,
+    val createdAt: LocalDateTime,
+    val sourceId: String? = null,
 )
 
 data class RoutineSettings(
@@ -37,6 +72,7 @@ data class RoutineSettings(
     val dailyResetTime: LocalTime,
     val adminServerEnabled: Boolean,
     val manualActiveWindowOverride: ActiveWindowOverride?,
+    val walletInitializedAt: LocalDateTime?,
 ) {
     companion object {
         val Default = RoutineSettings(
@@ -44,6 +80,7 @@ data class RoutineSettings(
             dailyResetTime = LocalTime.of(5, 0),
             adminServerEnabled = true,
             manualActiveWindowOverride = null,
+            walletInitializedAt = null,
         )
     }
 }
@@ -53,17 +90,21 @@ data class StoreSnapshot(
     val windows: List<RoutineWindowConfig> = emptyList(),
     val tasks: List<RoutineTask> = emptyList(),
     val completions: List<DailyCompletion> = emptyList(),
+    val rewards: List<RewardConfig> = emptyList(),
+    val walletEntries: List<WalletEntry> = emptyList(),
     val settings: RoutineSettings = RoutineSettings.Default,
 )
 
 data class BoardTask(
     val task: RoutineTask,
     val completed: Boolean,
+    val count: Int = if (completed) 1 else 0,
 )
 
 data class PointTotals(
     val daily: Int = 0,
     val weekly: Int = 0,
+    val wallet: Int = 0,
 )
 
 data class ChildBoardState(
@@ -79,6 +120,7 @@ data class BoardState(
     val weekStart: LocalDate,
     val weekEnd: LocalDate,
     val children: List<ChildBoardState>,
+    val rewards: List<RewardConfig>,
     val allComplete: Boolean,
     val settings: RoutineSettings,
 )

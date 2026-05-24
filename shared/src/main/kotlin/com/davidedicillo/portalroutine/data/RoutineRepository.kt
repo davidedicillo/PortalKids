@@ -9,6 +9,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.temporal.TemporalAdjusters
+import java.util.UUID
+import kotlin.math.min
 
 class RoutineRepository(private val store: RoutineStore) {
     suspend fun snapshot(): StoreSnapshot {
@@ -54,6 +56,7 @@ class RoutineRepository(private val store: RoutineStore) {
 
     suspend fun boardState(now: LocalDateTime): BoardState {
         ensureSeedData()
+        ensureWalletInitialized(now)
         val snapshot = store.snapshot()
         val routineDate = RoutineEngine.effectiveRoutineDate(now, snapshot.settings.dailyResetTime)
         val activeWindow = RoutineEngine.activeWindow(
@@ -73,7 +76,10 @@ class RoutineRepository(private val store: RoutineStore) {
             val visibleTasks = snapshot.tasks
                 .filter { it.enabled && it.childId == child.id && it.windowId == activeWindow.id && it.isActiveOn(routineDate) }
                 .sortedBy { it.sortOrder }
-                .map { task -> BoardTask(task, task.id in completedTaskIds) }
+                .map { task ->
+                    val completion = snapshot.completions.firstOrNull { it.localDate == routineDate && it.taskId == task.id }
+                    BoardTask(task, task.id in completedTaskIds, completion?.normalizedCount() ?: 0)
+                }
             ChildBoardState(
                 child = child,
                 tasks = visibleTasks,
@@ -88,27 +94,18 @@ class RoutineRepository(private val store: RoutineStore) {
             weekStart = weekStart,
             weekEnd = weekEnd,
             children = childStates,
+            rewards = snapshot.rewards.filter { it.enabled }.sortedWith(compareBy({ it.sortOrder }, { it.title }, { it.id })),
             allComplete = RoutineEngine.isRoutineComplete(snapshot.tasks, childIds, activeWindow.id, completedTaskIds, routineDate),
             settings = snapshot.settings,
         )
     }
 
     suspend fun toggleTask(taskId: String, now: LocalDateTime) {
+        ensureWalletInitialized(now)
         val snapshot = store.snapshot()
         val routineDate = RoutineEngine.effectiveRoutineDate(now, snapshot.settings.dailyResetTime)
         val current = store.completion(routineDate, taskId)
-        val next = if (current?.completed == true) {
-            current.copy(completed = false, clearedAt = now)
-        } else {
-            DailyCompletion(
-                localDate = routineDate,
-                taskId = taskId,
-                completed = true,
-                completedAt = current?.completedAt ?: now,
-                clearedAt = null,
-            )
-        }
-        store.upsertCompletion(next)
+        setTaskCompletionCount(taskId, if (current?.completed == true) 0 else 1, now, routineDate)
     }
 
     suspend fun setTaskCompletion(
@@ -117,16 +114,30 @@ class RoutineRepository(private val store: RoutineStore) {
         now: LocalDateTime,
         routineDate: LocalDate? = null,
     ) {
+        setTaskCompletionCount(taskId, if (completed) 1 else 0, now, routineDate)
+    }
+
+    suspend fun setTaskCompletionCount(
+        taskId: String,
+        count: Int,
+        now: LocalDateTime,
+        routineDate: LocalDate? = null,
+    ) {
+        require(count >= 0) { "count must be zero or greater" }
+        ensureWalletInitialized(now)
         val snapshot = store.snapshot()
+        val task = snapshot.tasks.firstOrNull { it.id == taskId } ?: error("Unknown task $taskId")
         val targetDate = routineDate ?: RoutineEngine.effectiveRoutineDate(now, snapshot.settings.dailyResetTime)
+        val targetCount = if (task.repeatable) count else if (count > 0) 1 else 0
         val current = store.completion(targetDate, taskId)
-        val next = if (completed) {
+        val next = if (targetCount > 0) {
             DailyCompletion(
                 localDate = targetDate,
                 taskId = taskId,
                 completed = true,
                 completedAt = current?.completedAt ?: now,
                 clearedAt = null,
+                count = targetCount,
             )
         } else {
             DailyCompletion(
@@ -135,15 +146,21 @@ class RoutineRepository(private val store: RoutineStore) {
                 completed = false,
                 completedAt = current?.completedAt,
                 clearedAt = current?.clearedAt ?: now,
+                count = 0,
             )
         }
         store.upsertCompletion(next)
+        updateEarningEntry(task, next, now)
     }
 
     suspend fun resetDay(now: LocalDateTime) {
+        ensureWalletInitialized(now)
         val snapshot = store.snapshot()
         val routineDate = RoutineEngine.effectiveRoutineDate(now, snapshot.settings.dailyResetTime)
         store.resetDate(routineDate, now)
+        snapshot.walletEntries
+            .filter { it.kind == WalletEntryKind.Earning && it.id.startsWith("earning:$routineDate:") }
+            .forEach { entry -> store.deleteWalletEntry(entry.id) }
         store.updateSettings(snapshot.settings.copy(manualActiveWindowOverride = null))
     }
 
@@ -186,6 +203,7 @@ class RoutineRepository(private val store: RoutineStore) {
             snapshot.copy(
                 children = snapshot.children.filterNot { it.id == childId }.sortedBy { it.sortOrder },
                 tasks = snapshot.tasks.filterNot { it.childId == childId },
+                walletEntries = snapshot.walletEntries.filterNot { it.childId == childId },
             ),
         )
     }
@@ -218,12 +236,45 @@ class RoutineRepository(private val store: RoutineStore) {
     }
 
     suspend fun upsertTask(task: RoutineTask) {
+        require(task.pointValue >= 0) { "pointValue must be zero or greater" }
         val snapshot = store.snapshot()
         store.replaceSnapshot(
             snapshot.copy(
                 tasks = snapshot.tasks
                     .filterNot { it.id == task.id }
                     .plus(task)
+                    .sortedWith(compareBy({ it.childId }, { it.windowId }, { it.sortOrder })),
+            ),
+        )
+    }
+
+    suspend fun reorderTasks(childId: String, windowId: String, taskIds: List<String>) {
+        val snapshot = store.snapshot()
+        val targetTasks = snapshot.tasks
+            .filter { it.childId == childId && it.windowId == windowId }
+            .sortedWith(compareBy({ it.sortOrder }, { it.title }, { it.id }))
+        val targetTaskIds = targetTasks.map { it.id }.toSet()
+        val requestedTaskIds = taskIds.distinct().filter { it in targetTaskIds }
+        if (requestedTaskIds.isEmpty()) return
+
+        val remainingTaskIds = targetTasks
+            .map { it.id }
+            .filterNot { it in requestedTaskIds }
+        val orderById = (requestedTaskIds + remainingTaskIds)
+            .withIndex()
+            .associate { (index, taskId) -> taskId to index }
+
+        store.replaceSnapshot(
+            snapshot.copy(
+                tasks = snapshot.tasks
+                    .map { task ->
+                        val nextOrder = orderById[task.id]
+                        if (nextOrder != null && task.childId == childId && task.windowId == windowId) {
+                            task.copy(sortOrder = nextOrder)
+                        } else {
+                            task
+                        }
+                    }
                     .sortedWith(compareBy({ it.childId }, { it.windowId }, { it.sortOrder })),
             ),
         )
@@ -237,6 +288,79 @@ class RoutineRepository(private val store: RoutineStore) {
     suspend fun updateDailyResetTime(time: LocalTime) {
         val snapshot = store.snapshot()
         store.updateSettings(snapshot.settings.copy(dailyResetTime = time))
+    }
+
+    suspend fun updateReward(reward: RewardConfig) {
+        require(reward.pointCost >= 0) { "pointCost must be zero or greater" }
+        val snapshot = store.snapshot()
+        store.replaceSnapshot(
+            snapshot.copy(
+                rewards = snapshot.rewards
+                    .filterNot { it.id == reward.id }
+                    .plus(reward)
+                    .sortedWith(compareBy({ it.sortOrder }, { it.title }, { it.id })),
+            ),
+        )
+    }
+
+    suspend fun deleteReward(rewardId: String) {
+        val snapshot = store.snapshot()
+        store.replaceSnapshot(snapshot.copy(rewards = snapshot.rewards.filterNot { it.id == rewardId }))
+    }
+
+    suspend fun redeemReward(
+        childId: String,
+        rewardId: String,
+        now: LocalDateTime,
+        operationId: String = UUID.randomUUID().toString(),
+    ): Boolean {
+        ensureWalletInitialized(now)
+        if (store.walletEntry(operationId) != null) return false
+        val snapshot = store.snapshot()
+        val child = snapshot.children.firstOrNull { it.id == childId } ?: return false
+        val reward = snapshot.rewards.firstOrNull { it.id == rewardId && it.enabled } ?: return false
+        if (walletBalance(snapshot, child.id) < reward.pointCost) return false
+
+        store.upsertWalletEntry(
+            WalletEntry(
+                id = operationId,
+                childId = child.id,
+                amount = -reward.pointCost,
+                kind = WalletEntryKind.RewardRedemption,
+                reason = reward.title,
+                createdAt = now,
+                sourceId = reward.id,
+            ),
+        )
+        return true
+    }
+
+    suspend fun deductPoints(
+        childId: String,
+        amount: Int,
+        reason: String,
+        now: LocalDateTime,
+        operationId: String = UUID.randomUUID().toString(),
+    ): Int {
+        require(amount >= 0) { "amount must be zero or greater" }
+        ensureWalletInitialized(now)
+        if (amount == 0) return 0
+        val snapshot = store.snapshot()
+        if (snapshot.children.none { it.id == childId }) return 0
+        val applied = min(amount, walletBalance(snapshot, childId))
+        if (applied <= 0) return 0
+        store.upsertWalletEntry(
+            WalletEntry(
+                id = operationId,
+                childId = childId,
+                amount = -applied,
+                kind = WalletEntryKind.Deduction,
+                reason = reason.ifBlank { "Parent deduction" },
+                createdAt = now,
+                sourceId = null,
+            ),
+        )
+        return applied
     }
 
     private fun defaultChildren(): List<ChildConfig> = listOf(
@@ -282,19 +406,22 @@ class RoutineRepository(private val store: RoutineStore) {
         weekEnd: LocalDate,
     ): Map<String, PointTotals> {
         val childIds = snapshot.children.map { it.id }.toSet()
-        val taskChildIds = snapshot.tasks.associate { it.id to it.childId }
         val daily = mutableMapOf<String, Int>()
         val weekly = mutableMapOf<String, Int>()
+        val wallet = snapshot.walletEntries
+            .filter { it.childId in childIds }
+            .groupBy { it.childId }
+            .mapValues { (_, entries) -> entries.sumOf { it.amount }.coerceAtLeast(0) }
 
-        snapshot.completions
-            .filter { it.completed }
-            .forEach { completion ->
-                val childId = taskChildIds[completion.taskId]?.takeIf { it in childIds } ?: return@forEach
-                if (completion.localDate == routineDate) {
-                    daily[childId] = daily.getOrDefault(childId, 0) + 1
+        snapshot.walletEntries
+            .filter { it.childId in childIds && it.kind == WalletEntryKind.Earning }
+            .forEach { entry ->
+                val earningDate = entry.earningDate() ?: return@forEach
+                if (earningDate == routineDate) {
+                    daily[entry.childId] = daily.getOrDefault(entry.childId, 0) + entry.amount
                 }
-                if (!completion.localDate.isBefore(weekStart) && !completion.localDate.isAfter(weekEnd)) {
-                    weekly[childId] = weekly.getOrDefault(childId, 0) + 1
+                if (!earningDate.isBefore(weekStart) && !earningDate.isAfter(weekEnd)) {
+                    weekly[entry.childId] = weekly.getOrDefault(entry.childId, 0) + entry.amount
                 }
             }
 
@@ -302,8 +429,91 @@ class RoutineRepository(private val store: RoutineStore) {
             PointTotals(
                 daily = daily.getOrDefault(childId, 0),
                 weekly = weekly.getOrDefault(childId, 0),
+                wallet = wallet.getOrDefault(childId, 0),
             )
         }
+    }
+
+    private suspend fun ensureWalletInitialized(now: LocalDateTime) {
+        val snapshot = store.snapshot()
+        if (snapshot.settings.walletInitializedAt != null) return
+        val routineDate = RoutineEngine.effectiveRoutineDate(now, snapshot.settings.dailyResetTime)
+        val weekStart = routineDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val weekEnd = weekStart.plusDays(6)
+        val tasksById = snapshot.tasks.associateBy { it.id }
+        val existingEntryIds = snapshot.walletEntries.map { it.id }.toSet()
+        val seedEntries = snapshot.completions
+            .filter { completion ->
+                completion.completed &&
+                    !completion.localDate.isBefore(weekStart) &&
+                    !completion.localDate.isAfter(weekEnd)
+            }
+            .mapNotNull { completion ->
+                val task = tasksById[completion.taskId] ?: return@mapNotNull null
+                val id = earningEntryId(completion.localDate, completion.taskId)
+                if (id in existingEntryIds) return@mapNotNull null
+                val amount = task.pointsFor(completion)
+                if (amount <= 0) return@mapNotNull null
+                WalletEntry(
+                    id = id,
+                    childId = task.childId,
+                    amount = amount,
+                    kind = WalletEntryKind.Earning,
+                    reason = task.title,
+                    createdAt = completion.completedAt ?: now,
+                    sourceId = id,
+                )
+            }
+        store.replaceSnapshot(
+            snapshot.copy(
+                walletEntries = (snapshot.walletEntries + seedEntries)
+                    .sortedWith(compareBy({ it.createdAt }, { it.id })),
+                settings = snapshot.settings.copy(walletInitializedAt = now),
+            ),
+        )
+    }
+
+    private suspend fun updateEarningEntry(task: RoutineTask, completion: DailyCompletion, now: LocalDateTime) {
+        val id = earningEntryId(completion.localDate, completion.taskId)
+        val amount = task.pointsFor(completion)
+        if (!completion.completed || amount <= 0) {
+            store.deleteWalletEntry(id)
+            return
+        }
+        store.upsertWalletEntry(
+            WalletEntry(
+                id = id,
+                childId = task.childId,
+                amount = amount,
+                kind = WalletEntryKind.Earning,
+                reason = task.title,
+                createdAt = completion.completedAt ?: now,
+                sourceId = id,
+            ),
+        )
+    }
+
+    private fun earningEntryId(localDate: LocalDate, taskId: String): String = "earning:$localDate:$taskId"
+
+    private fun DailyCompletion.normalizedCount(): Int {
+        return if (!completed) 0 else count.coerceAtLeast(1)
+    }
+
+    private fun RoutineTask.pointsFor(completion: DailyCompletion): Int {
+        return pointValue.coerceAtLeast(0) * completion.normalizedCount()
+    }
+
+    private fun walletBalance(snapshot: StoreSnapshot, childId: String): Int {
+        return snapshot.walletEntries
+            .filter { it.childId == childId }
+            .sumOf { it.amount }
+            .coerceAtLeast(0)
+    }
+
+    private fun WalletEntry.earningDate(): LocalDate? {
+        val value = sourceId ?: id
+        if (!value.startsWith("earning:")) return null
+        return runCatching { LocalDate.parse(value.removePrefix("earning:").substringBefore(":")) }.getOrNull()
     }
 
     private fun visualCueFor(taskId: String, title: String): String {
