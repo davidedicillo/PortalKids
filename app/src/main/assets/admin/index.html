@@ -146,6 +146,7 @@
       grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr);
     }
     #rewardForm,
+    #grantForm,
     #deductForm {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
@@ -401,6 +402,7 @@
       #taskForm,
       #resetTimeForm,
       #rewardForm,
+      #grantForm,
       #deductForm,
       #loginForm {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -415,6 +417,8 @@
       #resetTimeForm button,
       #rewardForm label,
       #rewardForm button,
+      #grantForm label,
+      #grantForm button,
       #deductForm label,
       #deductForm button {
         grid-column: auto;
@@ -436,6 +440,7 @@
       #taskForm,
       #resetTimeForm,
       #rewardForm,
+      #grantForm,
       #deductForm,
       #loginForm {
         grid-template-columns: 1fr;
@@ -528,6 +533,12 @@
       <section>
         <h2>Points</h2>
         <p id="pointsWeek" class="muted"></p>
+        <form id="grantForm">
+          <label>Child <select name="childId"></select></label>
+          <label>Amount <input name="amount" type="number" min="0" required></label>
+          <label>Reason <input name="reason" placeholder="Bonus"></label>
+          <button type="submit">Add Points</button>
+        </form>
         <form id="deductForm">
           <label>Child <select name="childId"></select></label>
           <label>Amount <input name="amount" type="number" min="0" required></label>
@@ -550,6 +561,11 @@
           <button id="clearRewardForm" class="ghost" type="button">New Reward</button>
         </form>
         <table id="rewardsTable"></table>
+      </section>
+
+      <section>
+        <h2>Claimed Rewards</h2>
+        <table id="claimedRewardsTable"></table>
       </section>
 
       <section>
@@ -933,6 +949,14 @@
         ["Reward", r => r.title], ["Cost", r => `${r.pointCost} pts`], ["Enabled", r => r.enabled ? "Yes" : "No"], ["Note", r => r.note || ""],
         ["", r => `<span class="actions"><button data-edit-reward="${r.id}" class="secondary compact">Edit</button><button data-delete-reward="${r.id}" class="danger compact">Delete</button></span>`]
       ]);
+      renderTable("claimedRewardsTable", state.claimedRewards || [], [
+        ["Redeemed", r => r.redeemedAt],
+        ["Child", r => state.children.find(child => child.id === r.childId)?.displayName || r.childId],
+        ["Reward", r => r.title],
+        ["Cost", r => `${r.pointCost} pts`],
+        ["Status", r => r.refundable ? "Claimed" : `Refunded${r.refundedAt ? ` ${r.refundedAt}` : ""}`],
+        ["", r => r.refundable ? `<span class="actions"><button data-refund-reward="${escapeHtml(r.id)}" class="secondary compact" type="button">Refund</button></span>` : ""]
+      ]);
       renderTable("historyTable", state.history, [
         ["Date", r => r.localDate], ["Task", r => r.taskId], ["Done", r => r.completed ? "Yes" : "No"], ["Count", r => r.count ?? (r.completed ? 1 : 0)],
         ["Completed", r => r.completedAt], ["Cleared", r => r.clearedAt]
@@ -1009,6 +1033,12 @@
           await postAndRender("/api/rewards/delete", { id: button.dataset.deleteReward });
         };
       });
+      document.querySelectorAll("[data-refund-reward]").forEach(button => {
+        button.onclick = async () => {
+          if (!confirm("Refund this claimed reward?")) return;
+          await postAndRender("/api/wallet/refund-reward", { id: button.dataset.refundReward });
+        };
+      });
     };
 
     const fillForm = (formId, values) => {
@@ -1057,6 +1087,12 @@
       if (saved) clearRewardForm();
     };
     document.getElementById("clearRewardForm").onclick = clearRewardForm;
+    document.getElementById("grantForm").onsubmit = async event => {
+      event.preventDefault();
+      if (!confirm("Add these points?")) return;
+      await postAndRender("/api/wallet/add", new FormData(event.target));
+      event.target.reset();
+    };
     document.getElementById("deductForm").onsubmit = async event => {
       event.preventDefault();
       if (!confirm("Deduct these points?")) return;

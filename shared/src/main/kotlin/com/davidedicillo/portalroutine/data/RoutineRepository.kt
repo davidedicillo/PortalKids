@@ -363,6 +363,65 @@ class RoutineRepository(private val store: RoutineStore) {
         return applied
     }
 
+    suspend fun addPoints(
+        childId: String,
+        amount: Int,
+        reason: String,
+        now: LocalDateTime,
+        operationId: String = UUID.randomUUID().toString(),
+    ): Int {
+        require(amount >= 0) { "amount must be zero or greater" }
+        ensureWalletInitialized(now)
+        if (amount == 0) return 0
+        if (store.walletEntry(operationId) != null) return 0
+        val snapshot = store.snapshot()
+        if (snapshot.children.none { it.id == childId }) return 0
+        store.upsertWalletEntry(
+            WalletEntry(
+                id = operationId,
+                childId = childId,
+                amount = amount,
+                kind = WalletEntryKind.ManualGrant,
+                reason = reason.ifBlank { "Parent point grant" },
+                createdAt = now,
+                sourceId = null,
+            ),
+        )
+        return amount
+    }
+
+    suspend fun refundRewardRedemption(
+        redemptionEntryId: String,
+        now: LocalDateTime,
+        operationId: String = UUID.randomUUID().toString(),
+    ): Int {
+        ensureWalletInitialized(now)
+        if (store.walletEntry(operationId) != null) return 0
+        val snapshot = store.snapshot()
+        val redemption = snapshot.walletEntries.firstOrNull { entry ->
+            entry.id == redemptionEntryId &&
+                entry.kind == WalletEntryKind.RewardRedemption &&
+                entry.amount < 0
+        } ?: return 0
+        val alreadyRefunded = snapshot.walletEntries.any { entry ->
+            entry.kind == WalletEntryKind.RewardRefund && entry.sourceId == redemption.id
+        }
+        if (alreadyRefunded) return 0
+        val refundAmount = -redemption.amount
+        store.upsertWalletEntry(
+            WalletEntry(
+                id = operationId,
+                childId = redemption.childId,
+                amount = refundAmount,
+                kind = WalletEntryKind.RewardRefund,
+                reason = "Refund: ${redemption.reason}",
+                createdAt = now,
+                sourceId = redemption.id,
+            ),
+        )
+        return refundAmount
+    }
+
     private fun defaultChildren(): List<ChildConfig> = listOf(
         ChildConfig("child-a", "Kid A", "#1F8A70", 0),
         ChildConfig("child-b", "Kid B", "#D95F59", 1),
@@ -450,8 +509,10 @@ class RoutineRepository(private val store: RoutineStore) {
             }
             .mapNotNull { completion ->
                 val task = tasksById[completion.taskId] ?: return@mapNotNull null
-                val id = earningEntryId(completion.localDate, completion.taskId)
+                val id = earningEntryId(completion.localDate, task.childId, completion.taskId)
+                val legacyId = legacyEarningEntryId(completion.localDate, completion.taskId)
                 if (id in existingEntryIds) return@mapNotNull null
+                if (snapshot.walletEntries.any { it.id == legacyId && it.childId == task.childId }) return@mapNotNull null
                 val amount = task.pointsFor(completion)
                 if (amount <= 0) return@mapNotNull null
                 WalletEntry(
@@ -474,11 +535,19 @@ class RoutineRepository(private val store: RoutineStore) {
     }
 
     private suspend fun updateEarningEntry(task: RoutineTask, completion: DailyCompletion, now: LocalDateTime) {
-        val id = earningEntryId(completion.localDate, completion.taskId)
+        val id = earningEntryId(completion.localDate, task.childId, completion.taskId)
+        val legacyId = legacyEarningEntryId(completion.localDate, completion.taskId)
+        val sameChildLegacyEntry = store.walletEntry(legacyId)?.takeIf { it.childId == task.childId }
         val amount = task.pointsFor(completion)
         if (!completion.completed || amount <= 0) {
             store.deleteWalletEntry(id)
+            if (sameChildLegacyEntry != null) {
+                store.deleteWalletEntry(legacyId)
+            }
             return
+        }
+        if (sameChildLegacyEntry != null) {
+            store.deleteWalletEntry(legacyId)
         }
         store.upsertWalletEntry(
             WalletEntry(
@@ -493,7 +562,9 @@ class RoutineRepository(private val store: RoutineStore) {
         )
     }
 
-    private fun earningEntryId(localDate: LocalDate, taskId: String): String = "earning:$localDate:$taskId"
+    private fun earningEntryId(localDate: LocalDate, childId: String, taskId: String): String = "earning:$localDate:$childId:$taskId"
+
+    private fun legacyEarningEntryId(localDate: LocalDate, taskId: String): String = "earning:$localDate:$taskId"
 
     private fun DailyCompletion.normalizedCount(): Int {
         return if (!completed) 0 else count.coerceAtLeast(1)

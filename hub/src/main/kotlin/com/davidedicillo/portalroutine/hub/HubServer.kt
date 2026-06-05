@@ -49,7 +49,9 @@ class HubServer(
                 session.uri == "/api/tasks/delete" && session.method == Method.POST -> authenticated(session) { deleteTask(session) }
                 session.uri == "/api/rewards" && session.method == Method.POST -> authenticated(session) { upsertReward(session) }
                 session.uri == "/api/rewards/delete" && session.method == Method.POST -> authenticated(session) { deleteReward(session) }
+                session.uri == "/api/wallet/add" && session.method == Method.POST -> authenticated(session) { addPoints(session) }
                 session.uri == "/api/wallet/deduct" && session.method == Method.POST -> authenticated(session) { deductPoints(session) }
+                session.uri == "/api/wallet/refund-reward" && session.method == Method.POST -> authenticated(session) { refundReward(session) }
                 session.uri == "/api/reset" && session.method == Method.POST -> authenticated(session) { resetDay() }
                 session.uri == "/api/settings/reset-time" && session.method == Method.POST -> authenticated(session) { updateResetTime(session) }
                 else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found").withCors()
@@ -270,6 +272,25 @@ class HubServer(
             childId = required(params, "childId"),
             amount = params["amount"]?.toIntOrNull()?.takeIf { it >= 0 } ?: error("amount must be zero or greater"),
             reason = params["reason"].orEmpty().ifBlank { "Parent deduction" },
+            now = LocalDateTime.now(),
+        )
+        stateJson().put("applied", applied).let(::jsonResponse)
+    }
+
+    private fun addPoints(session: IHTTPSession): Response = runBlocking {
+        val params = formParams(session)
+        val applied = repository.addPoints(
+            childId = required(params, "childId"),
+            amount = params["amount"]?.toIntOrNull()?.takeIf { it >= 0 } ?: error("amount must be zero or greater"),
+            reason = params["reason"].orEmpty().ifBlank { "Parent point grant" },
+            now = LocalDateTime.now(),
+        )
+        stateJson().put("applied", applied).let(::jsonResponse)
+    }
+
+    private fun refundReward(session: IHTTPSession): Response = runBlocking {
+        val applied = repository.refundRewardRedemption(
+            redemptionEntryId = required(formParams(session), "id"),
             now = LocalDateTime.now(),
         )
         stateJson().put("applied", applied).let(::jsonResponse)

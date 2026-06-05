@@ -363,6 +363,76 @@ class RoutineRepositoryTest {
     }
 
     @Test
+    fun movingTaskToAnotherChildDoesNotMoveHistoricalWalletEarnings() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(
+                    ChildConfig("child-a", "Kid A", "#1F8A70", 0),
+                    ChildConfig("child-b", "Kid B", "#D95F59", 1),
+                ),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(
+                    RoutineTask("shared-task", "child-a", "morning", "Reading", enabled = true, sortOrder = 0, pointValue = 1, repeatable = true),
+                ),
+            ),
+        )
+        val repository = RoutineRepository(store)
+        val now = LocalDateTime.of(2026, 5, 13, 8, 0)
+
+        repository.setTaskCompletionCount("shared-task", count = 1, now = now)
+        repository.upsertTask(
+            RoutineTask("shared-task", "child-b", "morning", "Reading", enabled = true, sortOrder = 0, pointValue = 1, repeatable = true),
+        )
+        repository.setTaskCompletionCount("shared-task", count = 2, now = now.plusMinutes(1))
+
+        val board = repository.boardState(now.plusMinutes(2))
+        assertEquals(1, board.children.first { it.child.id == "child-a" }.points.wallet)
+        assertEquals(2, board.children.first { it.child.id == "child-b" }.points.wallet)
+    }
+
+    @Test
+    fun existingLegacyEarningEntryForAnotherChildIsPreservedWhenTaskMoves() = runTest {
+        val routineDate = LocalDate.of(2026, 5, 13)
+        val legacyEarningId = "earning:$routineDate:shared-task"
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(
+                    ChildConfig("child-a", "Kid A", "#1F8A70", 0),
+                    ChildConfig("child-b", "Kid B", "#D95F59", 1),
+                ),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(
+                    RoutineTask("shared-task", "child-b", "morning", "Reading", enabled = true, sortOrder = 0, pointValue = 1, repeatable = true),
+                ),
+                completions = listOf(
+                    DailyCompletion(routineDate, "shared-task", true, LocalDateTime.of(2026, 5, 13, 8, 0), null, count = 1),
+                ),
+                walletEntries = listOf(
+                    WalletEntry(
+                        id = legacyEarningId,
+                        childId = "child-a",
+                        amount = 1,
+                        kind = WalletEntryKind.Earning,
+                        reason = "Reading",
+                        createdAt = LocalDateTime.of(2026, 5, 13, 8, 0),
+                        sourceId = legacyEarningId,
+                    ),
+                ),
+                settings = RoutineSettings.Default.copy(walletInitializedAt = LocalDateTime.of(2026, 5, 13, 8, 0)),
+            ),
+        )
+        val repository = RoutineRepository(store)
+        val now = LocalDateTime.of(2026, 5, 13, 8, 5)
+
+        repository.setTaskCompletionCount("shared-task", count = 2, now = now, routineDate = routineDate)
+
+        val board = repository.boardState(now.plusMinutes(1))
+        assertEquals(1, board.children.first { it.child.id == "child-a" }.points.wallet)
+        assertEquals(2, board.children.first { it.child.id == "child-b" }.points.wallet)
+        assertEquals(setOf("child-a", "child-b"), store.snapshot().walletEntries.map { it.childId }.toSet())
+    }
+
+    @Test
     fun parentDeductionClampsWalletAtZero() = runTest {
         val store = InMemoryRoutineStore(
             StoreSnapshot(
@@ -380,6 +450,51 @@ class RoutineRepositoryTest {
         assertEquals(3, deduction)
         assertEquals(0, repository.boardState(now.plusMinutes(2)).children.single().points.wallet)
         assertEquals(-3, store.snapshot().walletEntries.single { it.kind == WalletEntryKind.Deduction }.amount)
+    }
+
+    @Test
+    fun parentPointGrantAddsPositiveWalletEntry() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+            ),
+        )
+        val repository = RoutineRepository(store)
+        val now = LocalDateTime.of(2026, 5, 13, 8, 0)
+
+        val applied = repository.addPoints("child-a", 7, "Bonus", now, operationId = "grant-1")
+
+        assertEquals(7, applied)
+        assertEquals(7, repository.boardState(now.plusMinutes(1)).children.single().points.wallet)
+        val entry = store.snapshot().walletEntries.single { it.kind == WalletEntryKind.ManualGrant }
+        assertEquals(7, entry.amount)
+        assertEquals("Bonus", entry.reason)
+    }
+
+    @Test
+    fun rewardRedemptionRefundRestoresWalletOnce() = runTest {
+        val store = InMemoryRoutineStore(
+            StoreSnapshot(
+                children = listOf(ChildConfig("child-a", "Kid A", "#1F8A70", 0)),
+                windows = listOf(RoutineWindowConfig("morning", "Morning", LocalTime.of(6, 30), 0)),
+                tasks = listOf(RoutineTask("task-a", "child-a", "morning", "Task A", enabled = true, sortOrder = 0, pointValue = 5)),
+                rewards = listOf(RewardConfig("reward-a", "Movie night", pointCost = 3, enabled = true, sortOrder = 0)),
+            ),
+        )
+        val repository = RoutineRepository(store)
+        val now = LocalDateTime.of(2026, 5, 13, 8, 0)
+
+        repository.setTaskCompletion("task-a", completed = true, now = now)
+        assertTrue(repository.redeemReward("child-a", "reward-a", now.plusMinutes(1), operationId = "redeem-1"))
+
+        assertEquals(3, repository.refundRewardRedemption("redeem-1", now.plusMinutes(2), operationId = "refund-1"))
+        assertEquals(0, repository.refundRewardRedemption("redeem-1", now.plusMinutes(3), operationId = "refund-2"))
+
+        assertEquals(5, repository.boardState(now.plusMinutes(4)).children.single().points.wallet)
+        val refund = store.snapshot().walletEntries.single { it.kind == WalletEntryKind.RewardRefund }
+        assertEquals(3, refund.amount)
+        assertEquals("redeem-1", refund.sourceId)
     }
 
     @Test

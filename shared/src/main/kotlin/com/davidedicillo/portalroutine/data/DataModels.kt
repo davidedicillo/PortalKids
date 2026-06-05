@@ -54,6 +54,8 @@ data class RewardConfig(
 enum class WalletEntryKind {
     Earning,
     RewardRedemption,
+    RewardRefund,
+    ManualGrant,
     Deduction,
 }
 

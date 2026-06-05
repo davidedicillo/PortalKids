@@ -40,6 +40,8 @@ object StoreJson {
             .put("completions", JSONArray(snapshot.completions.map { it.toJson() }))
             .put("history", JSONArray(snapshot.completions.take(100).map { it.toJson() }))
             .put("rewards", JSONArray(snapshot.rewards.map { it.toJson() }))
+            .put("walletEntries", JSONArray(snapshot.walletEntries.map { it.toJson() }))
+            .put("claimedRewards", snapshot.claimedRewardsJson())
             .put("walletHistory", JSONArray(snapshot.walletEntries.sortedByDescending { it.createdAt }.take(100).map { it.toJson() }))
             .put("deviceProfiles", JSONArray())
     }
@@ -183,6 +185,34 @@ object StoreJson {
                 .put("weekly", childState.points.weekly)
                 .put("wallet", childState.points.wallet)
         }))
+
+    private fun StoreSnapshot.claimedRewardsJson(): JSONArray {
+        val refundsByRedemptionId = walletEntries
+            .filter { it.kind == WalletEntryKind.RewardRefund && !it.sourceId.isNullOrBlank() }
+            .groupBy { requireNotNull(it.sourceId) }
+        return JSONArray(
+            walletEntries
+                .filter { it.kind == WalletEntryKind.RewardRedemption && it.amount < 0 }
+                .sortedByDescending { it.createdAt }
+                .map { redemption ->
+                    val refunds = refundsByRedemptionId[redemption.id].orEmpty()
+                    val latestRefund = refunds.maxByOrNull { it.createdAt }
+                    val refundedAmount = refunds.sumOf { it.amount }.coerceAtLeast(0)
+                    val cost = -redemption.amount
+                    JSONObject()
+                        .put("id", redemption.id)
+                        .put("childId", redemption.childId)
+                        .put("rewardId", redemption.sourceId ?: "")
+                        .put("title", redemption.reason)
+                        .put("pointCost", cost)
+                        .put("redeemedAt", redemption.createdAt.toString())
+                        .put("refundedAmount", refundedAmount)
+                        .put("refundedAt", latestRefund?.createdAt?.toString() ?: "")
+                        .put("refundEntryId", latestRefund?.id ?: "")
+                        .put("refundable", refundedAmount < cost)
+                },
+        )
+    }
 
     private fun RoutineSettings.toJson() = JSONObject()
         .put("dailyResetTime", dailyResetTime.toString())
